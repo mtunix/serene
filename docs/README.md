@@ -18,7 +18,7 @@ After that, read the page for the area you're working on:
 | [auras.md](auras.md) | Auras, AuraFrame, UnitAuras |
 | [action-bars.md](action-bars.md) | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse |
 | [bags-merchant.md](bags-merchant.md) | Items, Inventory, BagMenu, Bags, BagSlots, BagRoom, Vendor, Merchant |
-| [shell.md](shell.md) | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings |
+| [shell.md](shell.md) | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings, Setup |
 
 ## The look
 
@@ -97,6 +97,7 @@ Modules initialise in TOC order, which is the order of this table.
 | `BagRoom.lua` | Offers "make room": the cheapest stack in your bags, to delete. |
 | `Modes.lua` | Puts the interface into rest mode when you're idle or away. |
 | `Settings.lua` | Builds the settings panel: Serene's own controls on eight pages. |
+| `Setup.lua` | Shows the setup on the first login (presets and a few pages) and what's new after an update. |
 | `Bindings.xml` | Declares the key bindings for Peek, the tracker and names. |
 | `Media/` | Holds Serene's textures; the scripts that make them are in `tools/media/`. |
 | `tools/check.py` | Checks every file for parse errors, unknown globals, locals used too early, accidental globals and dead code. |

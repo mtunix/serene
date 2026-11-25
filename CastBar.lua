@@ -9,11 +9,17 @@ local Safe, Clean = ns.Safe, ns.Clean
 --     coloured by what it is: a cast in soft gold, a channel in green, one that can't be stopped in grey, one that
 --     failed or was interrupted in soft red;
 --   - the spell's icon square at its start, inside the same glass;
---   - the spell's name in it, quiet, at the left; the time left (Edit Mode: "Show Cast Time") muted at the right;
---   - a soft spark at the fill's moving end while the cast goes on.
+--   - the spell's name in it, quiet, at the left; the time muted at the right, Serene's own words (time left, or
+--     left and the whole), whatever Edit Mode's "Show Cast Time" says;
+--   - a soft spark at the fill's moving end while the cast goes on;
+--   - your lag at the cast's end, a muted strip the fill dims through: once the fill is in it, the next spell can
+--     already be pressed (measured from the spell sent to the cast started, else the game's latency);
+--   - a channel's ticks, thin dark marks where they land (Drain Life, Blizzard, Arcane Missiles...);
+--   - a soft flash as it ends: light when the spell lands, red when it is interrupted or fails;
+--   - Serene's rhythm: in softly, away slowly (as the rest of Serene fades), and no shake on an interrupt.
 -- Settings (Serene's page, "Cast bar"; each at once, no reload): its height, its width (or Edit Mode's), the icon,
--- the spell's name in the bar, under it (the glass grows to hold it) or none, the words' size. Where it sits and its
--- scale stay Edit Mode's; whether the time shows too (its "Show Cast Time").
+-- the spell's name in the bar, under it (the glass grows to hold it) or none, the words' size, the time, the lag,
+-- the ticks, the flash, the fade. Where it sits and its scale stay Edit Mode's.
 -- Nothing protected is touched: all of it is safe in a fight.
 --   /serene castbar on|off    (a reload to switch)
 --   /serene castheight 4-24, /serene castwidth 0|80-400 (0: Edit Mode's)
@@ -44,11 +50,38 @@ local LOCKED = { 0.58, 0.58, 0.6 }
 local FAILED = { 0.78, 0.33, 0.3 } -- (Units.lua's hostile red)
 local BAR_TYPES = { standard = CASTING, channel = CHANNELING, uninterruptable = LOCKED, interrupted = FAILED,
 	empowered = { 1, 0.82, 0.35 } }
+local LANDED = { 1, 0.95, 0.82 } -- the flash of a spell that lands (the interrupted one's: FAILED)
+local FLASH_PEAK, FLASH_TIME = 0.45, 0.45
+local FAILED_PEAK, FAILED_TIME = 0.5, 0.7
+local LAG_ALPHA = 0.5
+local LAG_MOST = 1       -- (a spell started more than this after it was sent: something else, not lag)
+local TICK_ALPHA = 0.75
+local IN_TIME = 0.12     -- Serene's way in, from nothing (quicker than Fade's: a cast is news)
+local OUT_TIME = 0.9     -- and its way out (Fade's)
+-- A channel's ticks, every so many seconds, by its first rank (whose name, in the game's language, names every rank).
+local TICKS = {
+	[5143] = 1,  -- Arcane Missiles
+	[10] = 1,    -- Blizzard
+	[12051] = 2, -- Evocation
+	[689] = 1,   -- Drain Life
+	[5138] = 1,  -- Drain Mana
+	[1120] = 3,  -- Drain Soul
+	[755] = 1,   -- Health Funnel
+	[1949] = 1,  -- Hellfire
+	[5740] = 2,  -- Rain of Fire
+	[15407] = 1, -- Mind Flay
+	[16914] = 1, -- Hurricane
+	[740] = 2,   -- Tranquility
+	[1510] = 1,  -- Volley
+	[746] = 1,   -- First Aid (a bandage)
+}
 
 local dressed = {}     -- bar -> its parts
 local holding = false  -- (Serene's own calls, not heard by its hooks)
 local hidden           -- (where the art goes: a frame never shown, so the game's animations on it show nothing)
 local active = false
+local sentAt, lag      -- (when your last spell was sent; the lag your last cast measured)
+local tickNames        -- a channel's name -> seconds between its ticks (read once the game names the spells)
 
 local IsRegion, IsTexture, IsFontString = ns.IsRegion, ns.IsTexture, ns.IsFontString
 
@@ -129,27 +162,189 @@ local function Paint(c)
 	end
 end
 
--- The spark at the fill's moving end, while the cast goes on.
-local function Spark(c)
-	local bar, spark, fill = c.bar, c.spark, c.fill
-	-- (the game's own state on the bar, read with rawget: some of its frames have a metatable behind them)
-	local going = Clean(rawget(bar, "casting")) or Clean(rawget(bar, "channeling")) or Clean(rawget(bar, "reverseChanneling"))
+-- What the bar shows this frame: whether a cast goes on, a channel or not, where its fill is and its whole length.
+-- (the game's own state on the bar, read with rawget: some of its frames have a metatable behind them)
+local function Read(c)
+	local bar = c.bar
+	c.channel = Clean(rawget(bar, "channeling")) and true or false
+	c.going = c.channel or Clean(rawget(bar, "casting")) or Clean(rawget(bar, "reverseChanneling")) or false
 	local value = Clean(Safe(bar.GetValue, bar))
 	local least, most = Safe(bar.GetMinMaxValues, bar)
 	least, most = Clean(least), Clean(most)
-	local inside = type(value) == "number" and type(least) == "number" and type(most) == "number" and most > least
-		and value > least and value < most
-	if not (going and inside and fill) then
+	local known = type(value) == "number" and type(least) == "number" and type(most) == "number" and most > least
+	c.value = known and value - least or nil
+	c.most = known and most - least or nil
+	c.reverse = Clean(Safe(bar.GetReverseFill, bar)) and true or false
+end
+
+-- The spark at the fill's moving end, while the cast goes on.
+local function Spark(c)
+	local spark, fill = c.spark, c.fill
+	local inside = c.value and c.value > 0 and c.value < c.most
+	if not (c.going and inside and fill) then
 		spark:Hide()
 		return
 	end
-	local reverse = Clean(Safe(bar.GetReverseFill, bar)) and true or false
-	if c.sparkOn ~= fill or c.sparkReverse ~= reverse then
-		c.sparkOn, c.sparkReverse = fill, reverse
+	if c.sparkOn ~= fill or c.sparkReverse ~= c.reverse then
+		c.sparkOn, c.sparkReverse = fill, c.reverse
 		spark:ClearAllPoints()
-		spark:SetPoint("CENTER", fill, reverse and "LEFT" or "RIGHT", 0, 0)
+		spark:SetPoint("CENTER", fill, c.reverse and "LEFT" or "RIGHT", 0, 0)
 	end
 	spark:Show()
+end
+
+-- The time, in Serene's words: left ("1.4"), or left and the whole ("1.4 / 2.5"). (When the cast ends the last
+-- words stay, as the bar fades.)
+local function Time(c)
+	if not (c.going or Clean(rawget(c.bar, "isInEditMode"))) then return end
+	local mode = ns.db and ns.db.castTime or "left"
+	local text = ""
+	if mode ~= "none" and c.value then
+		local left = math.max(0, c.channel and c.value or c.most - c.value)
+		text = mode == "both" and ("%.1f / %.1f"):format(left, c.most) or ("%.1f"):format(left)
+	end
+	if text ~= c.timeText then
+		c.timeText = text
+		c.time:SetText(text)
+	end
+end
+
+-- Your lag, as the last cast measured it, else the game's latency (in seconds).
+local function Lag()
+	if lag then return lag end
+	local _, _, home, world = Safe(GetNetStats)
+	local ms = Clean(world) or Clean(home)
+	return type(ms) == "number" and ms > 0 and ms / 1000 or nil
+end
+
+-- Your lag at the cast's end: a cast ends at the fill's far end, a channel (emptying) at its start.
+local function Zone(c)
+	local zone = c.lag
+	local seconds = c.going and c.mine and ns.On("castLatency") and Lag()
+	if not (seconds and c.most and c.width) then
+		zone:Hide()
+		return
+	end
+	local width = math.max(1, math.min(c.width, c.width * seconds / c.most))
+	local side = (c.channel == c.reverse) and "RIGHT" or "LEFT"
+	if c.lagSide ~= side or c.lagWidth ~= width or c.lagHeight ~= c.height then
+		c.lagSide, c.lagWidth, c.lagHeight = side, width, c.height
+		zone:ClearAllPoints()
+		zone:SetPoint("TOP" .. side, c.bar, "TOP" .. side, 0, 0)
+		zone:SetSize(width, c.height)
+	end
+	zone:Show()
+end
+
+local function SpellName(id)
+	if C_Spell and C_Spell.GetSpellName then return Clean(Safe(C_Spell.GetSpellName, id)) end
+	return Clean((Safe(GetSpellInfo, id)))
+end
+
+-- Seconds between a channel's ticks, by its name (nil: a channel without ticks, or one Serene doesn't know).
+local function TickEvery(name)
+	if not name then return nil end
+	if not (tickNames and next(tickNames)) then
+		tickNames = {}
+		for id, every in pairs(TICKS) do
+			local spell = SpellName(id)
+			if spell then tickNames[spell] = every end
+		end
+	end
+	return tickNames[name]
+end
+
+-- A channel's ticks: a thin dark mark where each lands, the ones to come on the fill (the end itself isn't marked).
+local function Ticks(c)
+	local every
+	if c.channel and c.mine and c.most and c.width and ns.On("castTicks") then
+		-- (which channel: looked up once for each, by its spell and its length)
+		local id = Clean(rawget(c.bar, "spellID"))
+		local key = tostring(id) .. ":" .. c.most
+		if c.tickKey ~= key then
+			c.tickKey = key
+			local name = Clean((Safe(UnitChannelInfo, c.unit or "player"))) or (id and SpellName(id))
+			c.tickEvery = TickEvery(name)
+		end
+		every = c.tickEvery
+	else
+		c.tickKey = nil
+	end
+	local count = every and math.ceil(c.most / every - 0.001) - 1 or 0
+	local placed = every and (c.tickAt ~= c.tickKey or c.tickWidth ~= c.width or c.tickHeight ~= c.height
+		or c.tickReverse ~= c.reverse)
+	if placed then c.tickAt, c.tickWidth, c.tickHeight, c.tickReverse = c.tickKey, c.width, c.height, c.reverse end
+	for index = 1, math.max(count, #c.ticks) do
+		local tick = c.ticks[index]
+		if index <= count then
+			if not tick then
+				tick = c.bar:CreateTexture(nil, "OVERLAY", nil, 4)
+				tick:SetColorTexture(INK[1], INK[2], INK[3], TICK_ALPHA)
+				c.ticks[index] = tick
+				placed = true
+			end
+			if placed then
+				-- (the fill counts down: a tick lands where as much is left as its time from the end)
+				local x = (c.most - index * every) / c.most * c.width
+				tick:ClearAllPoints()
+				tick:SetPoint("CENTER", c.bar, c.reverse and "RIGHT" or "LEFT", c.reverse and -x or x, 0)
+				tick:SetSize(ns.Pixel(c.bar), c.height)
+			end
+			tick:Show()
+		elseif tick then
+			tick:Hide()
+		end
+	end
+end
+
+-- A soft flash over the bar as it ends, fading out.
+local function StartFlash(c, color, peak, duration)
+	if not (active and ns.On("castFlash")) then return end
+	c.flash:SetColorTexture(color[1], color[2], color[3], 1)
+	c.flash:SetAlpha(peak)
+	c.flashAt, c.flashPeak, c.flashFor = GetTime(), peak, duration
+end
+
+local function Flash(c, now)
+	if not c.flashAt then return end
+	local t = (now - c.flashAt) / c.flashFor
+	if t >= 1 then
+		c.flashAt = nil
+		c.flash:SetAlpha(0)
+		return
+	end
+	c.flash:SetAlpha(c.flashPeak * (1 - t) * (1 - t))
+end
+
+-- Serene's way in: the bar's own alpha, from nothing to full.
+local function FadeIn(c, now)
+	if not c.inAt then return end
+	local alpha = math.min(1, (now - c.inAt) / IN_TIME)
+	if alpha >= 1 then c.inAt = nil end
+	holding = true
+	pcall(c.bar.SetAlpha, c.bar, alpha)
+	holding = false
+end
+
+-- (the game's fades are its own animations on the bar: their fading parts timed anew, the game's times kept for when
+-- the setting goes off)
+local function Retime(c)
+	local serene = active and ns.On("castFade")
+	for _, part in ipairs(c.fades) do
+		pcall(part.anim.SetDuration, part.anim, serene and OUT_TIME or part.duration)
+	end
+end
+
+-- Every frame the bar is shown.
+local function Tick(c)
+	local now = GetTime()
+	Read(c)
+	Spark(c)
+	Time(c)
+	Zone(c)
+	Ticks(c)
+	Flash(c, now)
+	FadeIn(c, now)
 end
 
 -- The settings, read safely.
@@ -169,6 +364,7 @@ local function Layout(c)
 	local width = Setting("castWidth", 0, 400, 0)
 	if width <= ns.CAST_WIDTH_GAME then width = c.gameWidth end
 	Size(bar, width, height)
+	c.width, c.height = width, height -- (Serene's own measures: the lag and the ticks are placed by them)
 	local lined = ns.db and ns.db.unitBorder ~= "none"
 	local e = lined and PAD + ns.Pixel(bar) or PAD -- (a pixel more for the hairline, drawn just inside the glass)
 	-- the icon
@@ -189,27 +385,30 @@ local function Layout(c)
 	-- the words: in the bar where they fit, else under it
 	local mode = ns.db and ns.db.castText or "in"
 	local named = mode ~= "none" and c.text ~= nil
-	local timed = false
-	for _, other in ipairs(c.others) do
-		if Clean(Safe(other.IsShown, other)) then timed = true end
-	end
+	local timed = (ns.db and ns.db.castTime or "left") ~= "none"
 	local under = mode == "under" or height < FITS
 	local font = Setting("castFont", 0, 16, 0)
 	if font <= ns.CAST_FONT_AUTO then
 		font = under and UNDER_FONT or math.max(8, math.min(12, height - 1))
 	end
 	local row = under and (named or timed) and font + 2 or 0
-	for _, other in ipairs(c.others) do
-		if under then
-			Place(other, { "TOPRIGHT", bar, "BOTTOMRIGHT", -1, -UNDER_GAP })
-		else
-			Place(other, { "RIGHT", bar, "RIGHT", -TEXT_INSET, 0 })
-		end
-		pcall(other.SetJustifyH, other, "RIGHT")
-		Font(other, font, MUTED)
+	-- (the game's time put away: Serene writes its own)
+	for _, other in ipairs(c.others) do pcall(other.SetAlpha, other, 0) end
+	local time = c.time
+	if under then
+		Place(time, { "TOPRIGHT", bar, "BOTTOMRIGHT", -1, -UNDER_GAP })
+	else
+		Place(time, { "RIGHT", bar, "RIGHT", -TEXT_INSET, 0 })
 	end
+	pcall(time.SetJustifyH, time, "RIGHT")
+	pcall(time.SetWordWrap, time, false)
+	time:SetShown(timed)
+	Font(time, font, MUTED)
 	if c.text then
-		local room = timed and -math.max(TIME_ROOM, font * 3) or (under and -1 or -TEXT_INSET)
+		-- (left and the whole take more room than the time left alone)
+		local wide = ns.db and ns.db.castTime == "both"
+		local room = timed and -math.max(wide and TIME_ROOM * 2 or TIME_ROOM, font * (wide and 6 or 3))
+			or (under and -1 or -TEXT_INSET)
 		if under then
 			Place(c.text, { "TOPLEFT", bar, "BOTTOMLEFT", 1, -UNDER_GAP }, { "TOPRIGHT", bar, "BOTTOMRIGHT", room, -UNDER_GAP })
 		else
@@ -281,6 +480,34 @@ local function Dress(bar)
 	c.spark:SetColorTexture(1, 0.97, 0.88, 0.9)
 	c.spark:SetBlendMode("ADD")
 	c.spark:Hide()
+	-- the time, in Serene's words
+	c.time = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	-- your lag, and a channel's ticks (yours only: the pet's bar is its own)
+	local unit = Clean(rawget(bar, "unit"))
+	c.unit = type(unit) == "string" and unit or nil
+	c.mine = c.unit == nil or c.unit == "player"
+	c.lag = bar:CreateTexture(nil, "OVERLAY", nil, 5)
+	c.lag:SetColorTexture(MUTED[1], MUTED[2], MUTED[3], LAG_ALPHA)
+	c.lag:Hide()
+	c.ticks = {}
+	-- the flash as it ends
+	c.flash = bar:CreateTexture(nil, "OVERLAY", nil, 6)
+	c.flash:SetAllPoints(bar)
+	c.flash:SetColorTexture(1, 1, 1, 1)
+	c.flash:SetBlendMode("ADD")
+	c.flash:SetAlpha(0)
+	-- the game's fading parts of its fade animations (a short hold before them stays the game's)
+	c.fades = {}
+	for _, key in ipairs({ "FadeOutAnim", "HoldFadeOutAnim" }) do
+		local group = rawget(bar, key)
+		if type(group) == "table" and group.GetAnimations then
+			for _, anim in ipairs({ Safe(group.GetAnimations, group) }) do
+				local to = anim.GetToAlpha and Clean(Safe(anim.GetToAlpha, anim))
+				local duration = Clean(Safe(anim.GetDuration, anim))
+				if to == 0 and type(duration) == "number" then c.fades[#c.fades + 1] = { anim = anim, duration = duration } end
+			end
+		end
+	end
 	dressed[bar] = c
 
 	-- (the game paints it anew for each cast, and on the fill directly too: Serene's colour again, right after)
@@ -322,7 +549,7 @@ local function Dress(bar)
 	end)
 	hooksecurefunc(bar, "SetHeight", Again)
 	if bar.SetLook then hooksecurefunc(bar, "SetLook", Again) end
-	for _, region in ipairs({ c.icon or false, c.text or false, unpack(c.others) }) do
+	for _, region in ipairs({ c.icon or false, c.text or false }) do
 		if region then
 			for _, method in ipairs({ "SetPoint", "SetSize", "SetWidth", "SetHeight", "Show", "Hide", "SetShown",
 				"SetTexture", "SetFontObject" }) do
@@ -335,8 +562,38 @@ local function Dress(bar)
 		Again()
 	end)
 	bar:HookScript("OnUpdate", function()
-		Spark(c)
+		Tick(c)
 	end)
+	-- (the game ends a cast through these: its fade when the spell lands, its red hold when it is interrupted or fails)
+	if bar.PlayFadeAnim then
+		hooksecurefunc(bar, "PlayFadeAnim", function() StartFlash(c, LANDED, FLASH_PEAK, FLASH_TIME) end)
+	end
+	if bar.PlayInterruptAnims then
+		hooksecurefunc(bar, "PlayInterruptAnims", function() StartFlash(c, FAILED, FAILED_PEAK, FAILED_TIME) end)
+	end
+	-- (a cast starting while the bar is away: the game shows it at full at once; Serene's way in instead. Still fading
+	-- from the last one, it comes back at once.)
+	if bar.ApplyAlpha then
+		hooksecurefunc(bar, "ApplyAlpha", function(_, alpha)
+			if holding or not active or Clean(alpha) ~= 1 then return end
+			-- (a new cast: the last one's flash put out)
+			c.flashAt = nil
+			c.flash:SetAlpha(0)
+			if not ns.On("castFade") or Clean(Safe(bar.IsVisible, bar)) then return end
+			c.inAt = GetTime()
+			holding = true
+			pcall(bar.SetAlpha, bar, 0)
+			holding = false
+		end)
+	end
+	-- (no shake on an interrupt)
+	local shake = rawget(bar, "InterruptShakeAnim")
+	if type(shake) == "table" and shake.Play then
+		hooksecurefunc(shake, "Play", function(self)
+			if active and ns.On("castFade") then pcall(self.Stop, self) end
+		end)
+	end
+	Retime(c)
 	Paint(c)
 	pcall(Layout, c)
 end
@@ -484,6 +741,19 @@ local function Refresh()
 	for _, c in pairs(dressed) do
 		pcall(Paint, c)
 		pcall(Layout, c)
+		pcall(Retime, c)
+	end
+end
+
+-- Your lag: from your spell sent to its cast (or channel) started.
+local function Measure(_, event, unit)
+	if Clean(unit) ~= "player" then return end
+	if event == "UNIT_SPELLCAST_SENT" then
+		sentAt = GetTime()
+	elseif sentAt then
+		local took = GetTime() - sentAt
+		sentAt = nil
+		if took >= 0 and took <= LAG_MOST then lag = took end
 	end
 end
 
@@ -495,16 +765,28 @@ local function Init()
 	local events = CreateFrame("Frame")
 	pcall(events.RegisterEvent, events, "PLAYER_ENTERING_WORLD")
 	events:SetScript("OnEvent", DressAll)
+	local measure = CreateFrame("Frame")
+	for _, event in ipairs({ "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START" }) do
+		if not (measure.RegisterUnitEvent and pcall(measure.RegisterUnitEvent, measure, event, "player")) then
+			pcall(measure.RegisterEvent, measure, event)
+		end
+	end
+	measure:SetScript("OnEvent", Measure)
 end
 
--- /serene debug: which bars were found.
+-- /serene debug: which bars were found, your lag.
 function ns.CastDebug()
 	local found = {}
 	for bar, c in pairs(dressed) do
-		found[#found + 1] = ("%s (%d away, icon %s, time %s)"):format(Clean(Safe(bar.GetName, bar)) or "?", #c.away,
-			c.icon and "yes" or "no", #c.others > 0 and "yes" or "no")
+		found[#found + 1] = ("%s (%d away, icon %s, fades %d)"):format(Clean(Safe(bar.GetName, bar)) or "?", #c.away,
+			c.icon and "yes" or "no", #c.fades)
 	end
-	ns.Print("cast bars: " .. (#found > 0 and table.concat(found, ", ") or (active and "none found" or "off")))
+	local seconds = Lag()
+	ns.Print("cast bars: " .. (#found > 0 and table.concat(found, ", ") or (active and "none found" or "off"))
+		.. (active and ("; lag %s (%s)"):format(seconds and ("%d ms"):format(seconds * 1000) or "?",
+			lag and "measured" or "the game's") or ""))
 end
+
+ns.CastParts = function(bar) return dressed[bar] end -- (tests)
 
 table.insert(ns.modules, { init = Init, refresh = Refresh })

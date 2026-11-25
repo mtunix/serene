@@ -48,11 +48,12 @@ The specs:
 |---|---|
 | `smoke.lua` | The whole addon: login, every module's refresh, every switch and setting, a fight, the debug commands, the mouse over every Serene frame, a long list of game events |
 | `secrets.lua` | Fights with secret values, in several looks and settings |
-| `settings.lua` | Settings agree across files: what files read is declared, every default and every `ns.STATE` key is used, no setting doubles as saved state, the panel and `/serene` touch real settings, the migrations and the dropping of old keys |
+| `settings.lua` | Settings agree across files: what files read is declared, every default and every `ns.STATE` key is used, no setting doubles as saved state, the panel, the setup and `/serene` touch real settings, the migrations and the dropping of old keys |
 | `chat*.lua`, `items.lua`, `bags.lua`, `vendor.lua`, `tooltip.lua` | The logic of chat and loot lines, item sections, the bags with their rows of slots and tabs, make room and the menu, the merchant and full stacks (Merchant.lua), and the tooltips |
 | `actions*.lua`, `bars_*.lua`, `fade.lua`, `modes.lua`, `hints.lua` | The action button model, the bar modules, fading, rest mode, hints |
 | `swing.lua`, `aura_frame.lua` | The swing timer's lines through swings and speed changes; Serene's buff frame: its groups and filters, short buffs learned, the missing buffs' place beside the top row |
-| `cast_bar.lua`, `units.lua` | Your cast bar's look, colours, sizes and words; a target card as Units dresses it: its colours, art away, portrait side and fill direction, PvP crest, mirrored heal prediction, the target of target held until a fight ends, its cast bar in its row and the overheal mark |
+| `cast_bar.lua`, `units.lua` | Your cast bar's look, colours, sizes and words, its time, lag and ticks, its flash and fade, with its numbers secret; a target card as Units dresses it: its colours, art away, portrait side and fill direction, PvP crest, mirrored heal prediction, the target of target held until a fight ends, its cast bar in its row and the overheal mark |
+| `setup.lua` | The setup: when it opens (first login, an update, never again once seen), the presets, the reload at its end, and its lists agreeing with the panel and the TOC |
 | `top_bar.lua` | The money kept per character and the gold tooltip; the room in your bags on the band and on the menu band |
 | `client_rules.lua` | Rules of this client checked in the source, such as no `"TRILINEAR"` texture filter |
 | `stub.lua` | The stub's own rules, where a spec could trip over them |
@@ -101,7 +102,7 @@ Most problems on this client only appear in a fight, because of secret values an
 | Experience | bar found, last mode, last fade |
 | Swing | frames found and how, the CVar, attack state, speeds |
 | Units | per frame: art, badges, emblems, portrait, side |
-| CastBar | bars dressed |
+| CastBar | bars dressed and the game's fades found on each; your lag, measured or the game's |
 | Auras | buttons dressed (yours, target/focus, plates) |
 | AuraFrame | Serene's buff frame or why it isn't used; counts per group; missing buffs; known short buffs; what you can dispel |
 | UnitAuras | target/focus containers made, or why not |

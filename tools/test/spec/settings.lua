@@ -108,10 +108,13 @@ test("no setting is also used as a table of saved state", function()
 	eq(clashes, {}, "a setting indexed like a table")
 end)
 
--- The settings panel: every Toggle/Choice/Slider path and every `depends` names a real setting of the right kind,
--- and a Choice offers only values the setting's comment in DEFAULTS lists.
-local function Panel()
-	local text = assert(io.open(wow.root .. "/Settings.lua")):read("*a")
+-- The settings panel (and the setup, built of the same rows): every Toggle/Choice/Slider path and every `depends`
+-- names a real setting of the right kind, and a Choice offers only values the setting's comment in DEFAULTS lists.
+local ROWS = { "Settings.lua", "Setup.lua" }
+
+local function Panel(file)
+	file = file or "Settings.lua"
+	local text = assert(io.open(wow.root .. "/" .. file)):read("*a")
 	local controls = {}
 	local at = 1
 	while true do
@@ -120,7 +123,8 @@ local function Panel()
 		if kind == "Toggle" or kind == "Choice" or kind == "Slider" then
 			-- (the call runs until the next statement)
 			local stop = text:find("\n%s+[%a_][%w_]*%(", e) or #text
-			controls[#controls + 1] = { kind = kind, path = path, body = text:sub(e, stop), line = Line(text, s + 1) }
+			controls[#controls + 1] = { kind = kind, path = path, body = text:sub(e, stop), line = Line(text, s + 1),
+				file = file }
 		end
 		at = e + 1
 	end
@@ -140,34 +144,41 @@ local function Comment(key)
 	end
 end
 
-test("the settings panel's controls name real settings of the right kind", function()
-	local controls, text = Panel()
-	ok(#controls > 60, "found the panel's controls (" .. #controls .. ")")
+test("the settings panel's and the setup's controls name real settings of the right kind", function()
+	ok(#Panel() > 60, "found the panel's controls (" .. #Panel() .. ")")
+	ok(#Panel("Setup.lua") > 20, "found the setup's controls (" .. #Panel("Setup.lua") .. ")")
 	local wrong = {}
 	local want = { Toggle = "boolean", Choice = "string", Slider = "number" }
-	for _, c in ipairs(controls) do
-		local default = Default(c.path)
-		if type(default) ~= want[c.kind] then
-			wrong[#wrong + 1] = ("Settings.lua:%d %s %q: default is %s"):format(c.line, c.kind, c.path, tostring(default))
+	for _, file in ipairs(ROWS) do
+		local controls, text = Panel(file)
+		for _, c in ipairs(controls) do
+			local default = Default(c.path)
+			if type(default) ~= want[c.kind] then
+				wrong[#wrong + 1] = ("%s:%d %s %q: default is %s"):format(file, c.line, c.kind, c.path, tostring(default))
+			end
 		end
-	end
-	for list in text:gmatch("depends = (%b{})") do
-		for key in list:gmatch('"!?([%w_%.]+)"') do
-			if type(Default(key)) ~= "boolean" then wrong[#wrong + 1] = "depends on " .. key .. ": not a boolean setting" end
+		for list in text:gmatch("depends = (%b{})") do
+			for key in list:gmatch('"!?([%w_%.]+)"') do
+				if type(Default(key)) ~= "boolean" then wrong[#wrong + 1] = file .. ": depends on " .. key .. ": not a boolean setting" end
+			end
 		end
 	end
 	eq(wrong, {})
 end)
 
-test("a Choice in the panel offers only what its setting's comment lists", function()
+test("a Choice in the panel or the setup offers only what its setting's comment lists", function()
 	local wrong = {}
-	for _, c in ipairs(Panel()) do
+	local all = {}
+	for _, file in ipairs(ROWS) do
+		for _, c in ipairs(Panel(file)) do all[#all + 1] = c end
+	end
+	for _, c in ipairs(all) do
 		if c.kind == "Choice" and not c.path:find("%.") then
 			local comment = Comment(c.path) or ""
 			local body = c.body:gsub("depends = %b{}", "")
 			for value in body:gmatch('{%s*"([%w_]+)",%s*"') do
 				if not comment:find('"' .. value .. '"', 1, true) then
-					wrong[#wrong + 1] = ("Settings.lua:%d %s offers %q; Core.lua's comment doesn't list it"):format(c.line, c.path, value)
+					wrong[#wrong + 1] = ("%s:%d %s offers %q; Core.lua's comment doesn't list it"):format(c.file, c.line, c.path, value)
 				end
 			end
 		end

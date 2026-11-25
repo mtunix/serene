@@ -63,7 +63,7 @@ end
 
 local function Place(column, frame, height)
 	frame:SetPoint("TOPLEFT", page, "TOPLEFT", column.x, column.y)
-	frame:SetSize(COLUMN, height)
+	frame:SetSize(column.width or COLUMN, height)
 	column.y = column.y - height
 end
 
@@ -332,6 +332,22 @@ local function Hints()
 	if ns.HintsDirty then ns.HintsDirty() end
 end
 
+-- The same rows on a frame of another window (the setup's pages): build(column) adds them one under the other,
+-- width wide. Returns their height. They change the settings as the panel's do, and the panel's follow them.
+function ns.SettingsRows(frame, width, build)
+	local was = page
+	page = frame
+	local column = Column(0)
+	column.width = width
+	build(column)
+	page = was
+	return -column.y
+end
+ns.SettingsKit = { Header = Header, Toggle = Toggle, Choice = Choice, Slider = Slider, Note = Note, Seconds = Seconds }
+
+-- Every row of the panel's and the setup's shown as its setting now is (after the setup set several at once).
+function ns.SettingsApply() Apply() end
+
 -- The pages ------------------------------------------------------------------------------------------------------------
 -- Each builds its sections into a left and a right column.
 
@@ -366,6 +382,12 @@ local PAGES = {
 			after = Hints })
 		Slider(right, "Running out from", "hintBuffSoonAt", 30, 600, 15, Seconds,
 			{ depends = { "hints", "hintBuffs", "hintBuffSoon" }, after = Hints })
+
+		Header(right, "Setup")
+		Actions(right, "Serene's own few pages", {
+			{ "Set up again", function() if ns.OpenSetup then ns.OpenSetup("setup") end end },
+			{ "What's new", function() if ns.OpenSetup then ns.OpenSetup("news") end end },
+		})
 	end },
 
 	{ "chat", "Chat", function(left, right)
@@ -528,7 +550,13 @@ local PAGES = {
 		Slider(right, "Text size", "castFont", ns.CAST_FONT_AUTO, 16, 1, function(v)
 			return v <= ns.CAST_FONT_AUTO and "Auto" or ("%d"):format(v)
 		end, { depends = { "castBar" } })
-		Note(right, "Where it sits, its scale and the time: Edit Mode.", { depends = { "castBar" } })
+		Choice(right, "The time", "castTime", { { "left", "Left" }, { "both", "Left / whole" }, { "none", "None" } },
+			{ depends = { "castBar" } })
+		Toggle(right, "Your lag at its end", "castLatency", { note = "muted", depends = { "castBar" } })
+		Toggle(right, "A channel's ticks", "castTicks", { depends = { "castBar" } })
+		Toggle(right, "A soft flash as it ends", "castFlash", { depends = { "castBar" } })
+		Toggle(right, "In softly, away slowly", "castFade", { note = "no shake", depends = { "castBar" } })
+		Note(right, "Where it sits and its scale: Edit Mode.", { depends = { "castBar" } })
 	end },
 
 	{ "auras", "Buffs", function(left, right)

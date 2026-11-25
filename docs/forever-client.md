@@ -50,6 +50,7 @@ A few of the game's frames behave in ways that explain specific code:
 - The pet frame's health bar is anchored to its portrait. Anchoring the portrait to the bar makes an anchor loop, which the engine silently refuses, and the whole frame disappears (Units.lua).
 - `TargetFrameMixin:CheckClassification` sets the health fill's atlas directly on the fill texture, bypassing `SetStatusBarTexture`, so hooking the status bar isn't enough (Units.lua).
 - Heal prediction segments carry the health bar's slanted mask (Units.lua).
+- The cast bar ends a cast through its own methods: `PlayFadeAnim` when the spell lands, `PlayInterruptAnims` when it's interrupted or fails, and `ApplyAlpha(1)` when the next one starts. Its way out is two animations on the bar, `FadeOutAnim` and `HoldFadeOutAnim` (a hold after an interrupt), and the bar is hidden when they finish. An interrupt can also shake it (`InterruptShakeAnim`). The time is `CastTimeText`, shown only when Edit Mode's "Show Cast Time" is on (CastBar.lua).
 - The game's XP bar keeps its own animation state; calling `SetValue` on it leaves it empty, so Serene never writes to it (Experience.lua).
 - The recipe toast's icon is a baked, pre-masked round texture (`mask9`) that includes the bevel (Toasts.lua).
 - `GetLatestCompletedAchievements` returns nothing, so the sample achievement toast finds one by scanning categories (Toasts.lua).

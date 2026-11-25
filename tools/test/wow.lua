@@ -508,6 +508,10 @@ function Widget:IsPlaying() return S(self).playing or false end
 function Widget:GetAnimations() return unpack(S(self).anims or {}) end
 function Widget:GetDuration() return S(self).duration or 0 end
 function Widget:SetDuration(d) S(self).duration = d end
+function Widget:SetFromAlpha(a) S(self).fromAlpha = a end
+function Widget:GetFromAlpha() return S(self).fromAlpha or 0 end
+function Widget:SetToAlpha(a) S(self).toAlpha = a end
+function Widget:GetToAlpha() return S(self).toAlpha or 0 end
 function Widget:GetProgress() return 0 end
 function Widget:GetElapsed() return 0 end
 function Widget:GetLoopState() return "NONE" end

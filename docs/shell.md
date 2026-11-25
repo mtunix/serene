@@ -1,6 +1,6 @@
-# The shell: fading, the top of the screen, the compass, settings
+# The shell: fading, the top of the screen, the compass, settings, the setup
 
-This page covers the parts around the edges of the screen that aren't chat, unit frames, auras, bags or action bars (those have their own pages; the action bars are in [action-bars.md](action-bars.md)). Fade.lua and Modes.lua decide how visible the interface is. TopBar.lua and MenuBar.lua are the two bands of glass at the top of the screen, Minimap.lua turns the minimap into a compass, Tracker.lua and Names.lua are small toggles behind key bindings, and Settings.lua is the options panel.
+This page covers the parts around the edges of the screen that aren't chat, unit frames, auras, bags or action bars (those have their own pages; the action bars are in [action-bars.md](action-bars.md)). Fade.lua and Modes.lua decide how visible the interface is. TopBar.lua and MenuBar.lua are the two bands of glass at the top of the screen, Minimap.lua turns the minimap into a compass, Tracker.lua and Names.lua are small toggles behind key bindings, Settings.lua is the options panel, and Setup.lua is the setup window shown on the first login and after an update.
 
 ## Fade.lua
 
@@ -116,6 +116,23 @@ The options the rows take (`reload` only on toggles):
 | `reload` | changing it shows the gold "Reload to apply" button, which stays up until a reload even if you switch back (`needsReload`) |
 
 Toggles and choices apply at once through `Apply`, which calls `ns.Refresh()` and then every control's `Update()`; sliders call `ns.Refresh()` as they move. `tools/test/spec/settings.lua` checks that every control names a real setting of the right type, and that a choice only offers values its setting's comment in `ns.DEFAULTS` lists.
+
+## Setup.lua
+
+The setup is a window of glass in the middle of the screen (`SereneSetup`, Escape closes it), only as wide as its column of rows and as tall as its tallest page, so the buttons stay put from page to page. It opens two seconds after login when there is something to show:
+
+- On the account's first login (Core sets `ns.fresh` when `SereneDB` didn't exist yet), the setup's pages: a welcome, the presets, then Fading, Compass and top bar, Bars and frames, Chat and tooltips, Bags and merchants, and a last page. Dots under the page show where you are; Back and Next move between pages. "Keep the defaults" on the welcome page closes it with nothing changed, and "Skip to the end" on the others goes to the last page.
+- After an update, if `NEWS` has an entry newer than `setupSeen`, only what's new: one page with each newer version's rows under a header. Players who had Serene before the setup existed get this too, never the welcome.
+
+Either way `setupSeen` is set to the newest version in `NEWS` at login, so neither opens again by itself. `/serene setup` and `/serene news`, and the two buttons under Setup on the panel's General page, open them again; with nothing new since, the news page shows the latest version's.
+
+The pages' rows are the settings panel's own controls, built through `ns.SettingsRows(frame, width, build)` with the builders from `ns.SettingsKit`, so they look the same, apply at once and keep the panel's rows in step (`ns.SettingsApply`). `spec/settings.lua` holds Setup.lua's rows to the same rules as the panel's.
+
+The presets are three cards, one under the other: **Serene** (the defaults), **Always in view** (nothing fades or rests, the quest tracker shown) and **A light touch** (the game's own bars, unit frames, cast bar, buffs, bags, merchant, menu, swing timer and toasts; no top bar, readiness or hints). Picking one sets every key any preset names, to that preset's value or else the default, so picking one after another never leaves a mix; settings no preset names stay as they are. The card whose keys match the settings now is gold, so a fresh install opens with Serene chosen.
+
+The setup keeps the values of the settings read only at login (`RELOAD`, the same ones the panel marks "reload") as they were at login. If any differs on the last page, its button is "Reload" and reloads the interface; closed any other way, a line in the chat says a `/reload` is owed.
+
+A version that brings settings worth showing gets an entry at the end of `NEWS`: `{ version, header, build }`, where `build(column)` adds the rows. Its version is never newer than the TOC's `## Version`, which `spec/setup.lua` checks; a version with nothing to switch needs no entry.
 
 ## Bindings.xml
 

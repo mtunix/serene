@@ -34,7 +34,7 @@ At the start of any task touching code:
    | Auras, AuraFrame, UnitAuras | [docs/auras.md](docs/auras.md) |
    | Items, Inventory, BagMenu, Bags, BagSlots, BagRoom, Vendor, Merchant | [docs/bags-merchant.md](docs/bags-merchant.md) |
    | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse | [docs/action-bars.md](docs/action-bars.md) |
-   | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings | [docs/shell.md](docs/shell.md) |
+   | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings, Setup | [docs/shell.md](docs/shell.md) |
    | A game API, a frame of the game's, what is secret, textures | [docs/forever-client.md](docs/forever-client.md) |
    | Secret values and combat lockdown in code, hooks, the module shape, settings and saved data | [docs/architecture.md](docs/architecture.md) |
    | Checking, testing, debugging, probes, textures | [docs/workflow.md](docs/workflow.md) |

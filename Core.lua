@@ -47,7 +47,8 @@ local ADDON, ns = ...
 --   Units.lua    the unit frames made calm: the game's own frames (you, pet, target, focus), their ornate art away,
 --                flat bars on glass coloured by class or by how a creature feels about you, portraits round or away.
 --   CastBar.lua  your cast bar made calm: the game's own bar, its art away, a slim line on glass coloured by what
---                it is, the spell's icon at its start, its name and time quiet in it.
+--                it is, the spell's icon at its start, its name and time quiet in it, your lag at its end, a
+--                channel's ticks, a soft flash as it ends, in and out in Serene's rhythm.
 --   Auras.lua    buffs and debuffs made calm: the game's own aura buttons (yours, your target's and focus's), the
 --                icons round, a hairline ring around each (gold for a buff, a quieter shade of the game's colour for a
 --                debuff's kind), the time left small and muted under it.
@@ -65,6 +66,8 @@ local ADDON, ns = ...
 --                where the toasts appear, placed by dragging a sample (/serene toasts move).
 --   Tooltip.lua  tooltips in glass: no frame, a soft fade, quiet colours, how-to lines on Shift; in a fight
 --                the world's and the action bars' wait for Shift.
+--   Setup.lua    the setup: on the first login a few pages and three presets (all of Serene, always in view, a
+--                light touch); after an update, only what is new, with its switches.
 -- /serene for the switches.
 
 ns.DEFAULTS = {
@@ -130,6 +133,11 @@ ns.DEFAULTS = {
 	castIcon = true,  -- the spell's icon at its start
 	castText = "in",  -- the spell's name: "in" the bar, "under" it, or "none"
 	castFont = 0,     -- the words' size (0: worked out from the height)
+	castTime = "left", -- the time: "left" (1.4), "both" (left and the whole: 1.4 / 2.5) or "none"
+	castLatency = true, -- your lag at the cast's end: a muted strip, where the next spell can already be pressed
+	castTicks = true, -- a channel's ticks marked where they land
+	castFlash = true, -- a soft flash as a cast ends: light when it lands, red when it is interrupted
+	castFade = true,  -- in softly and away slowly, as the rest of Serene fades; no shake on an interrupt
 	auras = true,      -- buffs and debuffs made calm: round icons in a hairline ring, the time muted (Auras.lua; a reload to switch)
 	auraUnits = true,  -- the target's and focus's auras too (a reload to switch)
 	auraPlates = true, -- nameplates' auras too: your debuffs on an enemy (a reload to switch)
@@ -212,6 +220,7 @@ ns.STATE = {
 	auraAt = true, auraDebuffFree = true, auraShortSpells = true, -- AuraFrame.lua
 	topPos = true, gold = true,                       -- TopBar.lua (gold: money per character)
 	settingsPage = true,                              -- the settings panel's page last open
+	setupSeen = true,                                 -- the newest version whose news the setup showed (Setup.lua)
 	supplies = true,                                  -- BarSupplies.lua
 	ranks = true,                                     -- Ranks.lua
 	keyLearn = true,                                  -- BarKeys.lua
@@ -386,6 +395,8 @@ loader:RegisterEvent("PLAYER_LOGIN")
 loader:SetScript("OnEvent", function(self, event, name)
 	if event == "ADDON_LOADED" then
 		if name ~= ADDON then return end
+		-- (nothing saved yet: Serene's first login on this account, and the setup opens)
+		ns.fresh = type(SereneDB) ~= "table"
 		SereneDB = type(SereneDB) == "table" and SereneDB or {}
 		-- (what no file reads any more only takes room)
 		for key in pairs(SereneDB) do
@@ -488,6 +499,8 @@ local function Help()
 	ns.Print(("/serene idle 30-1800  -  seconds idle before rest mode (%d)"):format(ns.db.idleAfter))
 	ns.Print(("/serene compass hover|world  -  the compass only under the mouse, or always out in the world (%s)"):format(ns.db.compass))
 	ns.Print(("/serene top always|calm|hover  -  the top bar always, away in fights, or under the mouse only (%s)"):format(ns.db.topShow))
+	ns.Print("/serene setup  -  the setup again: how much of Serene, fading, bars, chat, bags")
+	ns.Print("/serene news  -  what the latest version brought, with its switches")
 	ns.Print("/serene names  -  hide or show the names over heads (key: ` by default)")
 	ns.Print("/serene copy  -  the chat's whole history to copy from (or Shift+Alt+click the chat)")
 	ns.Print(("/serene border line|none  -  the unit frames in a hairline of gold, or glass only (%s)"):format(ns.db.unitBorder))
@@ -516,6 +529,8 @@ SlashCmdList.SERENE = function(msg)
 		return ns.OpenSettings()
 	elseif a == "help" then
 		return Help()
+	elseif (a == "setup" or a == "news") and ns.OpenSetup then
+		return ns.OpenSetup(a)
 	elseif a == "copy" and ns.CopyHistory then
 		return ns.CopyHistory()
 	elseif a == "names" and Serene_ToggleNames then

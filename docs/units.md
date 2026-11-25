@@ -71,15 +71,37 @@ The overheal mark is a bright line with a fade at the full end of the bar, shown
 
 ## CastBar.lua
 
-CastBar restyles your own cast bar (`PlayerCastingBarFrame`), the pet and vehicle bars, and any frame Edit Mode registers as a cast bar system. Each becomes a slim flat bar on glass with the spell's icon at the start, the name inside, the time on the right and a soft spark at the moving end.
+CastBar restyles your own cast bar (`PlayerCastingBarFrame`), the pet and vehicle bars, and any frame Edit Mode registers as a cast bar system. Each becomes a slim flat bar on glass with the spell's icon at the start, the name inside, the time on the right and a soft spark at the moving end. On your own bars it adds your lag at the cast's end and a channel's ticks; every bar gets a soft flash as it ends and comes and goes in Serene's rhythm.
 
-All of the bar's art is reparented to `hidden`, a frame that's never shown. Reparenting matters here: the cast bar's flash and glow animations keep setting their textures' alpha, but nothing under a hidden parent is drawn whatever its alpha. Child frames go to alpha 0, except Edit Mode's `Selection`, which you need to drag the bar. The game paints the bar and its fill for each cast, so the colour is re-applied from hooks on both, using `CastColor` (below). Layout re-runs from `SetSize`, `SetHeight` and `SetLook` hooks, the last because Edit Mode's "lock to player frame" switches the bar to another look. Position and scale stay Edit Mode's; `c.gameWidth` remembers Edit Mode's width for when `castWidth` is 0. Nothing protected is touched, so it all works in combat.
+All of the bar's art is reparented to `hidden`, a frame that's never shown. Reparenting matters here: the cast bar's flash and glow animations keep setting their textures' alpha, but nothing under a hidden parent is drawn whatever its alpha. Child frames go to alpha 0, except Edit Mode's `Selection`, which you need to drag the bar. The game paints the bar and its fill for each cast, so the colour is re-applied from hooks on both, using `CastColor` (below). Layout re-runs from `SetSize`, `SetHeight` and `SetLook` hooks, the last because Edit Mode's "lock to player frame" switches the bar to another look. Position and scale stay Edit Mode's; `c.gameWidth` remembers Edit Mode's width for when `castWidth` is 0, and `Layout` keeps the size it gave the bar in `c.width` and `c.height`, which the lag and the ticks are placed by (`GetWidth` can be secret). Nothing protected is touched, so it all works in combat.
+
+### Every frame
+
+The bar's `OnUpdate` hook runs `Tick`. `Read` takes the game's state once: `casting`, `channeling` and `reverseChanneling` with `rawget`, and the value and its range through `Clean`, so a secret leaves them nil and nothing below is drawn from them. Then:
+
+- `Spark` sits on the fill's moving end while a cast goes on.
+- `Time` writes the time in a font string of Serene's own (`c.time`). The game's `CastTimeText`, and any other text on the bar, is held at alpha 0, so Edit Mode's "Show Cast Time" no longer decides; `castTime` does. A cast's time left is the range minus the value, a channel's is the value, since a channel counts down. When the cast ends the last words stay while the bar fades.
+- `Zone` is the lag: a muted strip as wide as your lag is long, over the fill, which dims through it. A cast ends at the fill's far end, a channel at its start (the fill empties towards it), and a reversed fill swaps the sides. The lag is measured from `UNIT_SPELLCAST_SENT` to the `UNIT_SPELLCAST_START` or `_CHANNEL_START` after it (`Measure`, at most `LAG_MOST`, so an instant spell's leftover send doesn't count); until a cast has measured it, the game's world latency from `GetNetStats` stands in.
+- `Ticks` marks where a channel's ticks land. `TICKS` gives the seconds between them by each spell's first rank; `TickEvery` turns those into names through the game, so every rank and any language matches, and the channel is named by `UnitChannelInfo` (or the bar's `spellID`). A channel Serene doesn't know gets no marks. They are looked up once per channel, keyed by its spell and length, so a pushback that shortens it places them again.
+- `Flash` and `FadeIn` run the two animations below.
+
+The lag and the ticks are only drawn on a bar whose `unit` is the player (or which has none); the pet's bar has neither.
+
+### How a cast ends
+
+This client's cast bar is the mixin from the game's `CastingBarFrame.lua`, and it ends a cast through its own methods, which CastBar post-hooks:
+
+- `PlayFadeAnim` runs when a spell lands: a light flash (`LANDED`) over the whole bar, fading out.
+- `PlayInterruptAnims` runs when it's interrupted or fails: the same in `FAILED` red, slower.
+- `ApplyAlpha(1)` runs when a cast starts. It puts out the last cast's flash. With `castFade` on, if the bar was away (not visible), it is set to 0 and `FadeIn` brings it to full over `IN_TIME`. A bar still fading from the last cast comes back at once.
+
+The way out is the game's own animations, `FadeOutAnim` (a 0.2 s delay, then 0.3 s to nothing) and `HoldFadeOutAnim` (a 1 s hold after an interrupt, then 0.3 s). When the fade finishes, the game hides the bar. `Dress` keeps their fading parts (an `Alpha` animation to 0) with the game's durations in `c.fades`, and `Retime` sets them to `OUT_TIME`, Fade's 0.9 s, or gives the game's times back when `castFade` goes off. The game also shakes the bar on an interrupt (`InterruptShakeAnim`), which a hook on its `Play` stops at once. A bar without these methods keeps the game's ending.
 
 ### The target's and focus's cast bars
 
 `ns.DressUnitCast(d, relayout)` turns the target's and focus's cast bars into a slim line under their cards; Units.lua calls it for each card that has a target of its own, with the function that places the row again when the game moves the bar. `ns.LayoutUnitCast(d, narrow, y)` draws it in the row Units.lua worked out: `narrow` is the room left for the target of target, `y` the row's top. These bars follow `units`, not `castBar`. Its colour comes from `CastColor`: newer cast bars say what they show in `barType`, older ones only colour the bar, so the raw colour is classified (red for a failed cast, grey for one that can't be interrupted, green for a channel). Your own cast bar uses the same `CastColor`, so the two always match.
 
-Settings: `castBar` (reload), `castHeight`, `castWidth` (0 for Edit Mode's width; `ns.CAST_WIDTH_GAME` is where the panel's slider shows "Edit Mode's"), `castIcon`, `castText` (`"in"`, `"under"` or `"none"`) and `castFont` (0 for automatic, shown in the panel as `ns.CAST_FONT_AUTO`).
+Settings: `castBar` (reload), `castHeight`, `castWidth` (0 for Edit Mode's width; `ns.CAST_WIDTH_GAME` is where the panel's slider shows "Edit Mode's"), `castIcon`, `castText` (`"in"`, `"under"` or `"none"`), `castFont` (0 for automatic, shown in the panel as `ns.CAST_FONT_AUTO`), `castTime` (`"left"`, `"both"` or `"none"`), `castLatency`, `castTicks`, `castFlash` and `castFade`. All but `castBar` apply live. `ns.CastDebug` prints the bars dressed, how many of the game's fades each had, and your lag and whether it was measured.
 
 ## Swing.lua
 

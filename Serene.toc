@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Serene
 ## Notes: A calm interface: chat in glass (a soft backdrop behind each message, nothing else), a clean minimap, and an interface that fades away when you don't need it and comes back on hover, in combat or with a target.
-## Version: 1.0.0
-## Author: Lindford
+## Version: 1.1.0
+## Author: mtunix
 ## OptionalDeps: Questie
 ## SavedVariables: SereneDB
 
@@ -53,3 +53,4 @@ BagSlots.lua
 BagRoom.lua
 Modes.lua
 Settings.lua
+Setup.lua

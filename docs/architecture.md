@@ -20,7 +20,7 @@ table.insert(ns.modules, { init = Init, refresh = Refresh })
 
 `Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register. Nor do `BagMenu.lua`, `BagSlots.lua`, `BagRoom.lua` and `UnitHeals.lua`, which Bags and Units drive.
 
-On `ADDON_LOADED`, Core lets go of every saved key that is neither a setting nor in `ns.STATE` (below), fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
+On `ADDON_LOADED`, Core notes whether `SereneDB` existed at all (`ns.fresh` is true on the account's first login, for the setup), lets go of every saved key that is neither a setting nor in `ns.STATE` (below), fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
 
 On `PLAYER_LOGIN`, Core calls each module's `init` in TOC order, each inside `pcall`. A module that fails prints its error in red and the rest carry on. `init` builds frames and installs hooks; it runs once. `refresh` is optional and re-applies settings. `ns.Refresh()` calls every module's `refresh` (also inside `pcall`) and runs after every `/serene` switch and every change in the settings panel.
 
@@ -32,7 +32,7 @@ The header comment says what the player sees, which settings exist and which `/s
 
 `Init` returns at once if the module's setting (`castBar`) is off, which is why that setting needs a reload. Otherwise it calls `DressAll`, which looks for the bars by name and through Edit Mode's registry, and registers `PLAYER_ENTERING_WORLD` so a pet's or vehicle's bar that appears later gets dressed too.
 
-`Dress(bar)` does the real work, once per bar. It finds the bar's icon, text and fill, moves the game's art onto `hidden`, adds Serene's glass, hairline and spark, and records all of it in `dressed[bar]`. Then it hooks the game's setters on the bar (`SetStatusBarColor`, `SetStatusBarTexture`, `SetSize`, `SetWidth`...) so that whenever the game repaints or resizes the bar, Serene's `Paint` and `Layout` run straight after it. An `OnUpdate` hook moves the spark with the fill. From then on the game drives everything; Serene only reacts.
+`Dress(bar)` does the real work, once per bar. It finds the bar's icon, text and fill, moves the game's art onto `hidden`, adds Serene's glass, hairline and spark, and records all of it in `dressed[bar]`. Then it hooks the game's setters on the bar (`SetStatusBarColor`, `SetStatusBarTexture`, `SetSize`, `SetWidth`...) so that whenever the game repaints or resizes the bar, Serene's `Paint` and `Layout` run straight after it, and the game's own methods for ending a cast so the flash and the fade follow them. An `OnUpdate` hook moves the spark with the fill and writes the time. From then on the game drives everything; Serene only reacts.
 
 `Refresh` re-runs `Paint` and `Layout` on every dressed bar, which is how settings like the height and width apply without a reload. `ns.CastDebug` prints which bars were found for `/serene debug`, and the file ends with the `table.insert(ns.modules, ...)` line.
 
@@ -44,7 +44,7 @@ Larger files add more of the same pieces: an events frame that schedules a scan 
 
 Modules read booleans with `ns.On(key)`, which falls back to the default before `ns.db` exists, and everything else straight from `ns.db`. A setting that applies live is re-read in the module's `refresh`. Some settings only take effect after a `/reload`, because the module either returns early from `init` when it's off or installs `hooksecurefunc` hooks, which can't be removed. These are `chat`, `minimap`, `menuBar`, `actionBars`, `units`, `castBar`, `auras`, `auraUnits`, `auraPlates`, `auraFrame`, `bags` and `toast`.
 
-Adding a setting means: an entry in `ns.DEFAULTS` with its comment, the module reading it, a control in `Settings.lua` (which binds controls to settings by a path string, `"fade"` or `"groups.bars"`, and marks the ones that need a reload), and optionally a word for `/serene` in Core's `SWITCHES` and `ORDER` and, when the word differs from the setting's key, `KEYS`. The `Toggle`, `Choice` and `Slider` calls in `Settings.lua`'s pages show how a control is declared; [shell.md](shell.md) describes the panel.
+Adding a setting means: an entry in `ns.DEFAULTS` with its comment, the module reading it, a control in `Settings.lua` (which binds controls to settings by a path string, `"fade"` or `"groups.bars"`, and marks the ones that need a reload), and optionally a word for `/serene` in Core's `SWITCHES` and `ORDER` and, when the word differs from the setting's key, `KEYS`. The `Toggle`, `Choice` and `Slider` calls in `Settings.lua`'s pages show how a control is declared; [shell.md](shell.md) describes the panel. A setting that needs a reload also goes in Setup.lua's `RELOAD`, and a new feature for the players who already have Serene gets its rows in the next version's entry of Setup.lua's `NEWS` (see [shell.md](shell.md#setuplua)).
 
 `SereneDB` also holds data that isn't a setting. A few of these have an empty default in `ns.DEFAULTS` so `Fill` creates them (`inv`, `bagPins`, `bagCats`, `bagKeep`, `hintLast`); the rest are created by their module when first needed and are listed in `ns.STATE` in `Core.lua`:
 
@@ -57,6 +57,7 @@ Adding a setting means: an entry in `ns.DEFAULTS` with its comment, the module r
 | `toastAt`, `auraAt`, `auraDebuffFree`, `topPos`, `bagsPos`, `bankPos` | Toasts, AuraFrame, TopBar, Bags | where you dragged something |
 | `auraShortSpells` | AuraFrame | buffs seen to be short, by spell id |
 | `settingsPage` | Settings | the panel page last open |
+| `setupSeen` | Setup | the newest version whose news has been shown |
 | `namesSaved`, `namesKeyGiven`, `tipCompare`, `tipCompareDone`, `merchantNoted`, `bagsNoted`, `ungrouped`, `topHover` | Names, Tooltip, Vendor, Bags, Core | one-time flags and values to give back |
 | `unitsDump`, `probeMouse`, `probeGlow`, `capture`, `capturing` | Units, Auras, ActionBars, Capture | debug dumps and captured test data |
 
@@ -225,6 +226,9 @@ The other exports:
 | `ns.PlaceMerchant` | Vendor | Bags |
 | `ns.MerchantBuyStack` | Merchant | Vendor |
 | `ns.CAST_WIDTH_GAME`, `ns.CAST_FONT_AUTO` | CastBar | Settings |
+| `ns.fresh` | Core | Setup |
+| `ns.SettingsRows`, `ns.SettingsKit`, `ns.SettingsApply` | Settings | Setup |
+| `ns.OpenSetup` | Setup | Core (`/serene setup`, `/serene news`), Settings |
 
 Exports are defined when a file loads, and callers look them up when they need them and check for nil, so load order rarely matters. The exceptions are things created in `init`: `ns.chat`, and the named frames Fade collects (it re-collects them every 3 seconds for that reason).
 
