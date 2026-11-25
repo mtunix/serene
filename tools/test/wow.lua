@@ -76,7 +76,11 @@ function wow.secret(value)
 end
 
 function wow.isSecret(value) return secrets[value] ~= nil end
-function wow.reveal(value) return secrets[value] and secrets[value].value or value end
+function wow.reveal(value)
+	local secret = secrets[value]
+	if secret then return secret.value end -- (a secret false is false, not the secret itself)
+	return value
+end
 
 _G.issecretvalue = function(value) return secrets[value] ~= nil end
 _G.type = function(value)
@@ -1502,6 +1506,13 @@ ContainerFrameCombinedBags:Hide()
 MerchantFrame:Hide()
 BankFrame:Hide()
 EditModeManagerFrame:Hide()
+-- (the how-many popup's parts, as the newer template keys them: a key read as a method otherwise, CancelButton
+-- starting with a verb)
+for _, key in ipairs({ "OkayButton", "CancelButton", "LeftButton", "RightButton" }) do
+	StackSplitFrame[key] = CreateFrame("Button", nil, StackSplitFrame)
+	StackSplitFrame[key]:SetSize(64, 24)
+end
+StackSplitFrame.StackSplitText = StackSplitFrame:CreateFontString()
 for index = 1, 10 do
 	local b = CreateFrame("Button", "MerchantItem" .. index, MerchantFrame)
 	CreateFrame("Button", "MerchantItem" .. index .. "ItemButton", b)

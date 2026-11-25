@@ -10,7 +10,8 @@ It follows Lua's scopes (a local is seen only after its `local` line, inside its
   * a local used above its definition: nil at call time;
   * a forgotten `local`: an assignment that makes a global by accident;
   * a local never read: a function no one calls, a value no one looks at (a name starting with _ is meant so);
-  * on a run over every file: an ns.X set but read nowhere, neither in the addon nor in tools/test.
+  * on a run over every file: an ns.X set but read nowhere, neither in the addon nor in tools/test; and a name in
+    tools/globals.txt that no file uses any more (Lua's own section aside: always there, harmless).
 
 A global is known when it's in tools/globals.txt: Lua's own, the game's API and frames, Serene's own globals.
 A new game API used on purpose goes into that file (in its section); anything else is a bug.
@@ -30,7 +31,8 @@ ALLOW = os.path.join(HERE, "tools", "globals.txt")
 
 
 def load_allowed():
-    reads, writes, section = set(), set(), None
+    """The names allowed to be read, to be written, and those that should be in use (the game's, Serene's)."""
+    reads, writes, game, section = set(), set(), set(), None
     for raw in open(ALLOW, encoding="utf-8"):
         line = raw.strip()
         if line.startswith("#"):
@@ -40,7 +42,9 @@ def load_allowed():
             reads.add(name)
             if section and section.startswith("# serene writes"):
                 writes.add(name)
-    return reads, writes
+            if section and not section.startswith("# lua"):
+                game.add(name)
+    return reads, writes, game
 
 
 # (luaparser 4.x keeps no line on most nodes: 0 then, and check() finds the line in the text)
@@ -297,7 +301,7 @@ def main(argv):
     if everything:
         # (the addon's own files only: the tests' Lua under tools/ defines its own globals)
         paths = sorted(p for p in os.listdir(HERE) if p.endswith(".lua"))
-    allowed_reads, allowed_writes = load_allowed()
+    allowed_reads, allowed_writes, expected = load_allowed()
     failed = False
     walkers = {}
     for path in paths:
@@ -320,6 +324,13 @@ def main(argv):
                 if name not in read:
                     failed = True
                     print(f"{path}: line {line}: ns.{name} is set but read nowhere (the addon, tools/test)")
+        used = set()
+        for walker in walkers.values():
+            if walker:
+                used |= set(walker.reads) | set(walker.writes)
+        for name in sorted(expected - used):
+            failed = True
+            print(f"tools/globals.txt: '{name}' is used by no file any more (taken out, or still meant?)")
     if not listing:
         print("check: problems found" if failed else f"check: {len(paths)} files ok")
     return 1 if failed else 0

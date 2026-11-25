@@ -1,6 +1,6 @@
 # Bags, bank and merchant
 
-Four files work together here. `Items.lua` reads the bags and decides what an item is; `Bags.lua` draws the bags and bank windows; `Vendor.lua` draws the merchant window and sells junk and repairs at every merchant; `Merchant.lua` buys full stacks and restyles the game's how-many popup.
+Six files work together here. `Items.lua` reads the bags and the bank's containers and decides what an item is; `Inventory.lua` remembers what every character carries; `Bags.lua` draws the bags and bank windows, and `BagSlots.lua` the rows of bag slots and bank tabs under their headers; `Vendor.lua` draws the merchant window and sells junk and repairs at every merchant; `Merchant.lua` buys full stacks and restyles the game's how-many popup.
 
 The file names and their settings are crossed:
 
@@ -17,13 +17,31 @@ The bags, bank and merchant are Serene's own windows. The game's windows still e
 
 `ns.Items` is the one place that answers "what is in this slot and where does it belong". Bags, Vendor, Merchant and Tooltip all go through it.
 
-`Items.Bags()` lists the player's containers: bags 0 to `NUM_BAG_SLOTS`, plus the reagent bag and the keyring where the client has them. `Items.Slot(bag, slot)` reads one slot through `C_Container.GetContainerItemInfo` (or the old global) and returns a plain table with `bag`, `slot`, `link`, `id`, `icon`, `count`, `quality`, `locked`, `quest` and `noValue`, or nil for an empty slot. Every value goes through `Clean`, so a secret comes back as nil rather than raising an error later.
+`Items.Bags()` lists the player's containers: bags 0 to `NUM_BAG_SLOTS`, plus the reagent bag and the keyring where the client has them. `Items.FreeSlots(bag)` gives the room left in a bag and its family (what kind of bag it is). `Items.BankTabs()` lists the character's purchased bank tabs, and `Items.BankBags()` every container of the bank: the tabs, or on a bank of the older kind its own slots and its bags.
+
+`Items.Slot(bag, slot)` reads one slot through `C_Container.GetContainerItemInfo` (or the old global) and returns a plain table with `bag`, `slot`, `link`, `id`, `icon`, `count`, `quality`, `locked`, `quest` and `noValue`, or nil for an empty slot. Every value goes through `Clean`, so a secret comes back as nil rather than raising an error later.
 
 `Items.Describe(entry)` adds the item's class, subclass, equip slot and name, and decides whether its stacks merge into one cell. Stackable items merge; gear never does, because each piece can be different. It works on saved entries of other characters too, which only carry a link, count and quality.
 
 `Items.Section(entry)` decides the section. A pin the player set (`bagPins[itemID]`) wins as long as the section still exists, either built-in or one of the player's own in `bagCats`. Without a valid pin, `AutoSection` decides: quest items go to Quest (so a grey quest item is never junk), quality 0 goes to Junk, bags and quivers to Other, anything equippable to Equipment, and the rest by item class. `Items.IsJunk(entry)` is simply `Section(entry) == "Junk"`, which gives the one rule both windows use: what you see under Junk is what gets sold, and nothing else.
 
 `Items.SellPrice(item)` returns what a vendor pays for one (0 if nothing), and `Items.Coins(copper, red)` formats money with the game's coin icons, in a quiet red for an amount you can't pay.
+
+## Inventory.lua
+
+`ns.Inventory` keeps what every character carries in `SereneDB.inv`. Bags.lua stores every scan of the player's own bags or bank with `Remember`, keyed by realm and character name:
+
+```lua
+inv[realm][name] = {
+	class = "MAGE", money = 123456,
+	bags = { { link, count, quality }, ... }, bagsFree = 12, bagsSpecial = { quiver = 4 }, bagsAt = time(),
+	bank = { ... }, bankFree = ..., bankSpecial = ..., bankAt = time(),
+}
+```
+
+`bankAt` here is a timestamp and has nothing to do with the `bankAt` setting. The bags are remembered whenever they change, even while closed; the bank only while the player is at a banker, since that's the only time it can be read. Clicking the name in the header switches the window to another character (`CharacterMenu`, `win.viewing`), and the "bank" word opens the remembered bank from anywhere.
+
+The same data feeds the item tooltip counts (`bagCounts`), which Inventory.lua adds itself: its module's `init` hooks the tooltips when `bags` is on. `OnItemTooltip` is a `TooltipDataProcessor` post-call (or an `OnTooltipSetItem` hook on older clients). It uses an index built lazily by `Index` and thrown away on every `Remember`, and it only adds lines for what the player wouldn't see anyway: the bank, and other characters.
 
 ## Bags.lua
 
@@ -55,26 +73,6 @@ On this client the item buttons are protected. Whether they are is read from the
 
 Alt-right-click on an item opens Serene's own small menu (`Menu`, not UIDropDownMenu): the player's sections, the built-in ones, "A section of your own..." (which adds the name to `bagCats`), "Back to its own section" and "Never suggest deleting" (`bagKeep`). Picking a section writes `bagPins[itemID]`. Right-clicking the header of one of the player's own sections offers "Remove this section", which calls `RemoveSection` and drops every pin pointing at it.
 
-### Remembered inventories
-
-Every scan of the player's own bags or bank is stored by `Remember` in `SereneDB.inv`, keyed by realm and character name:
-
-```lua
-inv[realm][name] = {
-	class = "MAGE", money = 123456,
-	bags = { { link, count, quality }, ... }, bagsFree = 12, bagsSpecial = { quiver = 4 }, bagsAt = time(),
-	bank = { ... }, bankFree = ..., bankSpecial = ..., bankAt = time(),
-}
-```
-
-`bankAt` here is a timestamp and has nothing to do with the `bankAt` setting. The bags are remembered whenever they change, even while closed; the bank only while the player is at a banker, since that's the only time it can be read. Clicking the name in the header switches the window to another character (`CharacterMenu`, `win.viewing`), and the "bank" word opens the remembered bank from anywhere.
-
-The same data feeds the item tooltip counts (`bagCounts`). `OnItemTooltip` is a `TooltipDataProcessor` post-call (or an `OnTooltipSetItem` hook on older clients). It uses an index built lazily by `Index` and thrown away on every `Remember`, and it only adds lines for what the player wouldn't see anyway: the bank, and other characters.
-
-### Bag slots and the bank's tabs
-
-The row of bag slots lets the player put on, swap and take off bags (`PutOn` uses `PutItemInBag` and `PickupBagFromSlot`); hovering a slot highlights that bag's items with `Spotlight`. The bank comes in two kinds. An older bank has its own slots plus bag slots to buy (`BankBagSlots`). This client's bank is tabbed: `BankTabs` reads the purchased tabs from `C_Bank.FetchPurchasedBankTabData`, and each tab holds a bag in an inventory slot that `C_Bank.BankBagTypeAndIDToInvSlot` names. It isn't known whether that call wants the tab's index or its id, so `TabInv` tries both; `/serene debug` prints both. Buying a tab or a bag slot never calls the purchase directly: the "buy" word sets `revealing`, puts the game's `BankFrame` back under `UIParent` and hides Serene's bank, so the purchase happens on the game's own page with its own confirmation. `BANKFRAME_CLOSED` puts the frame away again.
-
 ### Make room
 
 "make room" suggests the stack a vendor pays least for, in a small glass panel above the bags (`MakeRoom`, `Suggest`, `Cheapest`). It skips anything a vendor won't buy, quest items, locked items, the keyring and kept items. Delete, skip (for this opening only) or keep are the choices. It opens by itself when the bags open completely full (`BagsFull`, counting only bags that take any item).
@@ -86,6 +84,13 @@ The row of bag slots lets the player put on, swap and take off bags (`PutOn` use
 `bags` needs a reload. `bagColumns` is clamped to 4–24 in `Columns` (the panel offers 6–16). `bagCounts` turns the tooltip counts on, `bankAt` places the bank. `bagPins`, `bagCats`, `bagKeep` and `inv` are data rather than settings, as are `bagsPos`, `bankPos` and `bagsNoted`.
 
 A few things to be aware of: `protectedButtons` is only known once the first button exists, so opening the bags for the very first time in combat can still try to create one. A refresh that arrives while a window is being dragged is dropped rather than deferred (`win.moving`). `SpecialKind` walks `FAMILY` with `pairs`, so a bag whose family has several bits set gets an arbitrary one of them as its kind.
+
+## BagSlots.lua
+
+The row under each window's header is drawn here: `ns.BagSlotsRow(win, live)` for the bags, `ns.BankTabsRow(win, live)` for the bank, and `ns.BagSlotsHover(win)` after each refresh so the tooltip and the faded cells follow what changed under the mouse. Bags.lua calls them from `Refresh` and shares its measures and its `Text` helper as `ns.bags`, the way Chat.lua shares `ns.chat`. Each row sets `win.rowHeight`, which `Layout` starts the sections under.
+
+
+The row of bag slots lets the player put on, swap and take off bags (`PutOn` uses `PutItemInBag` and `PickupBagFromSlot`); hovering a slot highlights that bag's items with `Spotlight`. The bank comes in two kinds. An older bank has its own slots plus bag slots to buy (`BankBagSlots`). This client's bank is tabbed: `Items.BankTabs` reads the purchased tabs from `C_Bank.FetchPurchasedBankTabData`, and each tab holds a bag in an inventory slot that `C_Bank.BankBagTypeAndIDToInvSlot` names. It isn't known whether that call wants the tab's index or its id, so `TabInv` tries both; `/serene debug` prints both. Buying a tab or a bag slot never calls the purchase directly: the "buy" word calls the bank window's `Reveal` (in Bags.lua), which sets `revealing`, puts the game's `BankFrame` back under `UIParent` and hides Serene's bank, so the purchase happens on the game's own page with its own confirmation. `BANKFRAME_CLOSED` puts the frame away again.
 
 ## Vendor.lua: the merchant window
 

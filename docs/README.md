@@ -14,10 +14,10 @@ After that, read the page for the area you're working on:
 |---|---|
 | [chat.md](chat.md) | Chat, ChatLoot, ChatLines, ChatCard, ChatShell |
 | [tooltips-toasts.md](tooltips-toasts.md) | Tooltip, Toasts |
-| [units.md](units.md) | Units, CastBar, Swing, Regen, Experience |
+| [units.md](units.md) | Units, UnitHeals, CastBar, Swing, Regen, Experience |
 | [auras.md](auras.md) | Auras, AuraFrame, UnitAuras |
 | [action-bars.md](action-bars.md) | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse |
-| [bags-merchant.md](bags-merchant.md) | Items, Bags, Vendor, Merchant |
+| [bags-merchant.md](bags-merchant.md) | Items, Inventory, Bags, BagSlots, Vendor, Merchant |
 | [shell.md](shell.md) | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings |
 
 ## The look
@@ -53,7 +53,8 @@ Modules initialise in TOC order, which is the order of this table.
 | `Core.lua` | Holds the defaults, the palette and the shared helpers, loads the modules and handles `/serene`. |
 | `Capture.lua` | Records the game's chat sentences and item tooltips as test data, but only after `/serene capture on`. |
 | `Actions.lua` | Answers questions about the action buttons and their slots (`ns.Actions`) for every bar file. |
-| `Items.lua` | Reads bag slots and decides each item's section, and so what counts as junk (`ns.Items`), for the bags, merchant and tooltips. |
+| `Items.lua` | Reads bag slots and the bank's containers and decides each item's section, and so what counts as junk (`ns.Items`), for the bags, merchant and tooltips. |
+| `Inventory.lua` | Remembers every character's bags, bank, money and class (`ns.Inventory`), and adds their counts to item tooltips. |
 | `Tooltip.lua` | Puts tooltips on glass, quietens their colours and fades them; its `ns.ShowTip` and `ns.HideTip` are used by most files. |
 | `Chat.lua` | Puts each chat message on its own glass, shows the tabs as words and widens the window as Edit Mode allows. |
 | `ChatLoot.lua` | Folds loot, rolls, money, experience and reputation messages into a few short lines. |
@@ -79,7 +80,8 @@ Modules initialise in TOC order, which is the order of this table.
 | `Fade.lua` | Fades groups of frames to the rest opacity and brings them back when they're needed. |
 | `Swing.lua` | Restyles the client's built-in swing timer as thin lines of glass. |
 | `Units.lua` | Restyles the player, pet, target, focus and target-of-target frames as cards. |
-| `CastBar.lua` | Restyles your cast bar as a slim line on glass. |
+| `UnitHeals.lua` | Flattens the heal prediction on the cards' health bars, mirrors it with the target's, and marks an overheal. |
+| `CastBar.lua` | Restyles your cast bar as a slim line on glass, and the target's and focus's as lines under their cards. |
 | `Auras.lua` | Restyles the game's aura buttons (nameplates, and yours when `auraFrame` is `"game"`) and holds the aura look shared by the other aura files. |
 | `UnitAuras.lua` | Draws the target's and focus's auras on Serene's own AuraContainers. |
 | `AuraFrame.lua` | Draws your buffs and debuffs on Serene's own AuraContainers, with tiers, ghost buffs and the world shelf. |
@@ -89,12 +91,13 @@ Modules initialise in TOC order, which is the order of this table.
 | `Names.lua` | Hides or shows the names over heads with one key. |
 | `Merchant.lua` | Buys full stacks (Alt-click or the Stack button) and restyles the game's stack-split popup. |
 | `Vendor.lua` | Draws Serene's merchant window, sells junk and repairs at every merchant. |
-| `Bags.lua` | Draws Serene's bags and bank windows, remembers your other characters' items, and offers "make room". |
+| `Bags.lua` | Draws Serene's bags and bank windows, shows your other characters' items, and offers "make room". |
+| `BagSlots.lua` | Draws the row of bag slots under the bags' header and the bank's tabs under the bank's. |
 | `Modes.lua` | Puts the interface into rest mode when you're idle or away. |
 | `Settings.lua` | Builds the settings panel: Serene's own controls on eight pages. |
 | `Bindings.xml` | Declares the key bindings for Peek, the tracker and names. |
 | `Media/` | Holds Serene's textures; the scripts that make them are in `tools/media/`. |
-| `tools/check.py` | Checks every file for parse errors, unknown globals, locals used too early and accidental globals. |
+| `tools/check.py` | Checks every file for parse errors, unknown globals, locals used too early, accidental globals and dead code. |
 | `tools/test/` | Runs the addon's logic outside the game against a stub of the client ([workflow.md](workflow.md)). |
 | `.github/workflows/check.yml` | Runs the check and the tests on GitHub for every push to `main` and every pull request. |
 

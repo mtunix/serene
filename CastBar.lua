@@ -3,7 +3,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 
 -- Your cast bar made calm: the game's own bar (and your pet's, a vehicle's), nothing new beside it. Edit Mode still
 -- places and sizes it ("Lock to Player Frame" too), the game still fills it, names the spell, tells the time, fades
--- it out when the cast ends. Only looks change, as on the target's cast bar (Units.lua):
+-- it out when the cast ends. Only looks change, as on the target's and focus's (below, under their cards):
 --   - its art put away: the frame, the shield, the flashes and glows, the dark box under the spell's name;
 --   - the fill flat, on a slim slab of glass in a hairline of the game's gold (/serene border none: glass only),
 --     coloured by what it is: a cast in soft gold, a channel in green, one that can't be stopped in grey, one that
@@ -37,8 +37,13 @@ ns.CAST_WIDTH_GAME = 70
 ns.CAST_FONT_AUTO = 7
 -- (the game's names for its cast bars: retail-style first, the older ones after)
 local NAMES = { "PlayerCastingBarFrame", "CastingBarFrame", "PetCastingBarFrame", "OverlayPlayerCastingBarFrame" }
--- (should Units.lua not give its colours: the same ones)
+-- What a cast is, by its colour: a cast, a channel, one that can't be interrupted, one that failed.
 local CASTING = { 0.86, 0.7, 0.36 }
+local CHANNELING = { 0.42, 0.68, 0.44 }
+local LOCKED = { 0.58, 0.58, 0.6 }
+local FAILED = { 0.78, 0.33, 0.3 } -- (Units.lua's hostile red)
+local BAR_TYPES = { standard = CASTING, channel = CHANNELING, uninterruptable = LOCKED, interrupted = FAILED,
+	empowered = { 1, 0.82, 0.35 } }
 
 local dressed = {}     -- bar -> its parts
 local holding = false  -- (Serene's own calls, not heard by its hooks)
@@ -91,10 +96,26 @@ end
 
 -- The fill: flat, in the colour of what it shows ------------------------------------------------------------------
 
+-- (the newer cast bars say what they show; the older ones only colour it, and the colour is read)
+local function CastColor(c)
+	local bar = c.bar
+	local kind = Clean(rawget(bar, "barType")) -- (the newer cast bars say what they show)
+	if type(kind) == "string" and BAR_TYPES[kind] then return BAR_TYPES[kind] end
+	local raw = c.raw -- (the older ones only colour it: orange, green, grey, red)
+	if raw then
+		local r, g, b = raw[1], raw[2], raw[3]
+		if r > 0.85 and g < 0.35 and b < 0.35 then return FAILED end
+		if r < 0.9 and math.abs(r - g) < 0.1 and math.abs(g - b) < 0.1 then return LOCKED end
+		if g > 0.85 and r < 0.35 then return CHANNELING end
+	end
+	if Clean(rawget(bar, "notInterruptible")) then return LOCKED end
+	if Clean(rawget(bar, "channeling")) then return CHANNELING end
+	return CASTING
+end
 local function Paint(c)
 	if not active then return end
 	local bar = c.bar
-	local color = (ns.CastColor and ns.CastColor(c)) or CASTING
+	local color = CastColor(c)
 	holding = true
 	pcall(bar.SetStatusBarTexture, bar, FLAT)
 	pcall(bar.SetStatusBarColor, bar, color[1], color[2], color[3], 1)
@@ -266,7 +287,7 @@ local function Dress(bar)
 	hooksecurefunc(bar, "SetStatusBarColor", function(_, r, g, b)
 		if holding then return end
 		r, g, b = Clean(r), Clean(g), Clean(b)
-		-- (the game's own colour kept: Units' CastColor tells from it what an older bar is showing)
+		-- (the game's own colour kept: CastColor tells from it what an older bar is showing)
 		if type(r) == "number" and type(g) == "number" and type(b) == "number" then c.raw = { r, g, b } end
 		Paint(c)
 	end)
@@ -318,6 +339,129 @@ local function Dress(bar)
 	end)
 	Paint(c)
 	pcall(Layout, c)
+end
+
+-- The target's and focus's cast bars ----------------------------------------------------------------------------------
+-- A slim line on glass under the target's bars (Units.lua dresses the card, and says where the line goes: beside the
+-- target's target while that one is shown, the whole width of the bars otherwise), its icon at the outer end, the
+-- spell's name in it. The game keeps moving it (under the auras...): placed again each time. With the unit frames
+-- (units), whatever castBar says. Not protected: safe in a fight.
+
+local CAST_HEIGHT = 10
+local CAST_FONT = 9
+local onUnits = false -- (Units.lua dressed one: they are Serene's from then on)
+
+
+local function PaintCast(c)
+	if not onUnits then return end
+	local bar, color = c.bar, CastColor(c)
+	holding = true
+	pcall(bar.SetStatusBarTexture, bar, FLAT)
+	pcall(bar.SetStatusBarColor, bar, color[1], color[2], color[3], 1)
+	holding = false
+	Unmask(bar)
+end
+
+-- (d: Units.lua's card; narrow: room left at its outer end, for the target's target; y: the row's top, from the bars')
+function ns.LayoutUnitCast(d, narrow, y)
+	local c = d.cast
+	if not onUnits or not c or not d.below then return end
+	local bar, below, e = c.bar, d.below, d.e
+	local lined = ns.db.unitBorder == "line"
+	local right = d.side == "right"
+	local icon = c.icon and CAST_HEIGHT + 1 or 0
+	if right then
+		Place(bar, { "TOPLEFT", below, "BOTTOMLEFT", icon, y }, { "TOPRIGHT", below, "BOTTOMRIGHT", -narrow, y })
+	else
+		Place(bar, { "TOPLEFT", below, "BOTTOMLEFT", narrow, y }, { "TOPRIGHT", below, "BOTTOMRIGHT", -icon, y })
+	end
+	Size(bar, nil, CAST_HEIGHT)
+	local box = c.box
+	box:ClearAllPoints()
+	if c.icon then
+		if right then
+			Place(c.icon, { "TOPRIGHT", bar, "TOPLEFT", -1, 0 })
+		else
+			Place(c.icon, { "TOPLEFT", bar, "TOPRIGHT", 1, 0 })
+		end
+		Size(c.icon, CAST_HEIGHT, CAST_HEIGHT)
+		pcall(c.icon.SetTexCoord, c.icon, 0.08, 0.92, 0.08, 0.92)
+		box:SetPoint("TOPLEFT", right and c.icon or bar, "TOPLEFT", -e, e)
+		box:SetPoint("BOTTOMRIGHT", right and bar or c.icon, "BOTTOMRIGHT", e, -e)
+	else
+		box:SetPoint("TOPLEFT", bar, "TOPLEFT", -e, e)
+		box:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", e, -e)
+	end
+	box.lines:Fit()
+	for _, side in ipairs({ "top", "bottom", "left", "right" }) do box.lines[side]:SetShown(lined) end
+	pcall(box.SetFrameLevel, box, math.max(0, (Clean(Safe(bar.GetFrameLevel, bar)) or 1) - 1))
+	if c.text then
+		-- (room at the right for a timer, where there is one)
+		Place(c.text, { "LEFT", bar, "LEFT", 3, 0 }, { "RIGHT", bar, "RIGHT", #c.others > 0 and -26 or -3, 0 })
+		pcall(c.text.SetJustifyH, c.text, "LEFT")
+		pcall(c.text.SetWordWrap, c.text, false)
+	end
+	for _, other in ipairs(c.others) do Place(other, { "RIGHT", bar, "RIGHT", -3, 0 }) end
+end
+
+-- (relayout: Units.lua's own placing of it, for when the game moves it)
+function ns.DressUnitCast(d, relayout)
+	onUnits = true
+	local frame = d.frame
+	local bar = rawget(frame, "spellbar") or _G[d.name .. "SpellBar"]
+	if not IsRegion(bar) or not bar.SetStatusBarTexture or not bar.GetRegions then return end
+	local name = Clean(Safe(bar.GetName, bar))
+	local c = { bar = bar, others = {} }
+	c.icon = rawget(bar, "Icon") or (name and _G[name .. "Icon"])
+	c.text = rawget(bar, "Text") or (name and _G[name .. "Text"])
+	if not IsTexture(c.icon) then c.icon = nil end
+	if not IsFontString(c.text) then c.text = nil end
+	hidden = hidden or CreateFrame("Frame")
+	hidden:Hide()
+	local fill = Safe(bar.GetStatusBarTexture, bar)
+	for _, region in ipairs({ Safe(bar.GetRegions, bar) }) do
+		if IsTexture(region) then
+			if region ~= fill and region ~= c.icon then pcall(region.SetParent, region, hidden) end
+		elseif region ~= c.text and IsFontString(region) then
+			c.others[#c.others + 1] = region -- (a timer, from the game or an addon)
+		end
+	end
+	for _, text in ipairs({ c.text or false, unpack(c.others) }) do
+		if text then Font(text, CAST_FONT, SOFT) end
+	end
+	if c.icon then pcall(c.icon.Show, c.icon) end
+	c.box = CreateFrame("Frame", nil, bar)
+	c.box:EnableMouse(false)
+	c.box.ground = c.box:CreateTexture(nil, "BACKGROUND")
+	c.box.ground:SetAllPoints()
+	c.box.ground:SetColorTexture(INK[1], INK[2], INK[3], GLASS_ALPHA)
+	c.box.lines = ns.Hairline(c.box)
+	d.cast = c
+	-- (the game colours it, and moves it, again and again: Serene's colour and place again, right after)
+	hooksecurefunc(bar, "SetStatusBarColor", function(_, r, g, b)
+		if holding then return end
+		r, g, b = Clean(r), Clean(g), Clean(b)
+		if type(r) == "number" and type(g) == "number" and type(b) == "number" then c.raw = { r, g, b } end
+		PaintCast(c)
+	end)
+	hooksecurefunc(bar, "SetStatusBarTexture", function()
+		if not holding then PaintCast(c) end
+	end)
+	local function Again()
+		if not holding then pcall(relayout) end
+	end
+	for _, region in ipairs({ bar, c.icon or false, c.text or false }) do
+		if region then
+			hooksecurefunc(region, "SetPoint", Again)
+			if region.SetSize then hooksecurefunc(region, "SetSize", Again) end
+			if region.SetHeight then hooksecurefunc(region, "SetHeight", Again) end
+		end
+	end
+	bar:HookScript("OnShow", function()
+		PaintCast(c)
+		Again()
+	end)
+	PaintCast(c)
 end
 
 local function DressAll()

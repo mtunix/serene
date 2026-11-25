@@ -10,6 +10,7 @@ Core.lua
 Capture.lua
 Actions.lua
 Items.lua
+Inventory.lua
 Tooltip.lua
 Chat.lua
 ChatLoot.lua
@@ -35,6 +36,7 @@ Toasts.lua
 Fade.lua
 Swing.lua
 Units.lua
+UnitHeals.lua
 CastBar.lua
 Auras.lua
 UnitAuras.lua
@@ -46,5 +48,6 @@ Names.lua
 Merchant.lua
 Vendor.lua
 Bags.lua
+BagSlots.lua
 Modes.lua
 Settings.lua

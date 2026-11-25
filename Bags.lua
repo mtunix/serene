@@ -21,16 +21,15 @@ local Safe, Clean = ns.Safe, ns.Clean
 --   small glass above the window. Delete it, or skip it for the next cheapest, until one is gone; or keep it: never
 --   suggested again (undone with Alt-right-click on it). It opens by itself when the bags open full.
 -- The item buttons are the game's own (click, drag, use, split, tooltips as always); the game's bag and bank
--- windows stay, followed by these, only out of sight.
+-- windows stay, followed by these, only out of sight. (The rows of bag slots and tabs: BagSlots.lua; what is
+-- remembered, and the tooltips' counts: Inventory.lua.)
 
 local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local INK, SOFT, MUTED_RGB = ns.INK, ns.SOFT_RGB, ns.MUTED_RGB
 local GOLD = { 1, 0.82, 0.35 }
 local SIZE, GAP, PAD = 34, 4, 12      -- a cell, the room between cells, the room inside the glass
 local HEAD, SECTION, SECTION_GAP = 30, 18, 8
-local FOOT, TABS_ROW = 50, 22
-local SLOT = 26                       -- a bag slot in the row under the header
-local SLOTS_ROW = SLOT + 10
+local FOOT = 50
 local GLOW_TIME = 3                   -- seconds a new item glows
 local GLASS = 0.9
 local JUNK_ALPHA = 0.5
@@ -56,118 +55,15 @@ local protectedButtons = false -- the game's item buttons are protected here: la
 local glowAt, glowed = {}, {}  -- "bag:slot" -> when its glow began / glowed this opening
 local glowUntil = 0            -- (no glow after this: nothing to animate)
 local bagsByBank = false       -- the bags opened because a banker was spoken to (closed with the bank)
-local countsIndex              -- itemID -> { name -> { bags, bank } }, built when asked
 local suggested                -- "bag:slot" of the item "make room" suggests deleting (its cell glows)
 local Refresh, Menu            -- (below)
 
 -- Reading the bags ----------------------------------------------------------------------------------------------------
 
 local Container = C_Container or {}
-local NumSlots, IdOf, SlotInfo, BagIDs = Items.NumSlots, Items.IdOf, Items.Slot, Items.Bags
+local NumSlots, SlotInfo, BagIDs = Items.NumSlots, Items.Slot, Items.Bags
 local KEYRING, REAGENT_BAG = Items.KEYRING, Items.REAGENT_BAG
-
-local function FreeSlots(bag)
-	local free, family = Safe(Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots, bag)
-	return Clean(free) or 0, Clean(family) or 0
-end
-
-local function BankTabs()
-	local types = Enum and Enum.BankType
-	local tabs = types and C_Bank and C_Bank.FetchPurchasedBankTabData and Safe(C_Bank.FetchPurchasedBankTabData, types.Character)
-	local list = {}
-	for _, tab in ipairs(type(tabs) == "table" and tabs or {}) do
-		local id = Clean(tab.ID)
-		if id then list[#list + 1] = { id = id, name = Clean(tab.name) } end
-	end
-	return list
-end
-
--- Every container of the bank: your character's tabs; a bank of the older kind: its own slots and its bags.
-local function BankIDs()
-	local list = {}
-	for _, tab in ipairs(BankTabs()) do list[#list + 1] = tab.id end
-	if not list[1] then
-		list[1] = BANK_CONTAINER or -1
-		local first = Enum and Enum.BagIndex and Enum.BagIndex.BankBag_1 or (NUM_BAG_SLOTS or 4) + 1
-		for bag = first, first + (NUM_BANKBAGSLOTS or 7) - 1 do list[#list + 1] = bag end
-	end
-	return list
-end
-
--- The bank of the newer kind (tabs to buy, no bag slots), or the older (its own slots and bags).
-local function Tabbed()
-	if BankTabs()[1] then return true end
-	local types = Enum and Enum.BankType
-	if types and C_Bank and C_Bank.CanPurchaseBankTab and Clean(Safe(C_Bank.CanPurchaseBankTab, types.Character)) then
-		return true
-	end
-	return not _G.GetNumBankSlots -- (no call for the older bank's slots: only the newer kind)
-end
-
--- The inventory slot a bag sits in (what the game puts a bag in, or takes one from).
-local function InvSlot(bag)
-	local slot = Clean(Safe(Container.ContainerIDToInventoryID or _G.ContainerIDToInventoryID, bag))
-	return type(slot) == "number" and slot or nil
-end
-
--- The bag slots: { bag, inv, name, has (its icon), busy (the game has it locked), locked (not bought), buyable (the
--- next to buy) }; ReadSlot fills in inv, has and busy.
-local function BagSlots()
-	local list = {}
-	for bag = 1, (NUM_BAG_SLOTS or 4) do list[#list + 1] = { bag = bag, name = "Bag slot" } end
-	if REAGENT_BAG then list[#list + 1] = { bag = REAGENT_BAG, name = "Reagent bag slot" } end
-	return list
-end
-
-local function BankBagSlots()
-	local list = {}
-	if Tabbed() then return list end
-	local bought = Clean(Safe(_G.GetNumBankSlots)) or 0
-	local first = Enum and Enum.BagIndex and Enum.BagIndex.BankBag_1 or (NUM_BAG_SLOTS or 4) + 1
-	for index = 1, (NUM_BANKBAGSLOTS or 7) do
-		local slot = { bag = first + index - 1, index = index, name = "Bank bag slot" }
-		slot.locked = index > bought
-		slot.buyable = index == bought + 1
-		list[#list + 1] = slot
-	end
-	return list
-end
-
--- The newer bank's tabs as slots (Forever): each tab holds a bag of its own, in an inventory slot the game names
--- (C_Bank.BankBagTypeAndIDToInvSlot). Empty when the game has no such slots: the tabs are then only words.
-local TabInvSlot = C_Bank and C_Bank.BankBagTypeAndIDToInvSlot
-local function TabInv(index, id)
-	local types = Enum and Enum.BankType
-	if not (TabInvSlot and types) then return nil end
-	-- (unknown whether the game wants the tab's index or its id: both asked, /serene debug shows each)
-	for _, key in ipairs({ index, id }) do
-		local inv = Clean(Safe(TabInvSlot, types.Character, key))
-		if type(inv) == "number" and inv > 0 then return inv end
-	end
-end
-
-local function BankTabSlots()
-	local list, any = {}, false
-	for index, tab in ipairs(BankTabs()) do
-		local inv = TabInv(index, tab.id)
-		any = any or inv ~= nil
-		list[#list + 1] = { bag = tab.id, index = index, tab = true, tabInv = inv or false,
-			name = tab.name or ("Tab " .. index) }
-	end
-	return any and list or {}
-end
-
-local function ReadSlot(slot)
-	if slot.tab then
-		slot.inv = slot.tabInv or nil
-	else
-		-- (the older bank's bag slots: by their number, 1 asking for a bag slot rather than an item slot)
-		slot.inv = InvSlot(slot.bag) or (slot.index and Clean(Safe(_G.BankButtonIDToInvSlotID, slot.index, 1))) or nil
-	end
-	slot.has = slot.inv and not slot.locked and Clean(Safe(GetInventoryItemTexture, "player", slot.inv)) or nil
-	slot.busy = slot.has and Clean(Safe(_G.IsInventoryItemLocked, slot.inv)) and true or false
-	return slot
-end
+local FreeSlots, BankIDs = Items.FreeSlots, Items.BankBags
 
 -- What kind of room a bag holds: nil for any item, else a short word ("reagents", "quiver"...).
 local function SpecialKind(bag, family)
@@ -263,57 +159,12 @@ local function Sections(entries)
 	return list
 end
 
--- What is remembered ----------------------------------------------------------------------------------------------------
+-- What is remembered (Inventory.lua) -------------------------------------------------------------------------------------
 
-local function Me()
-	return Clean(Safe(GetRealmName)) or "?", Clean(Safe(UnitName, "player")) or "?"
-end
-
-local function Realm()
-	local realm = Me()
-	ns.db.inv[realm] = ns.db.inv[realm] or {}
-	return ns.db.inv[realm]
-end
-
-local function Mine()
-	local _, name = Me()
-	local characters = Realm()
-	local me = characters[name] or {}
-	characters[name] = me
-	me.class = Clean(select(2, Safe(UnitClass, "player"))) or me.class
-	me.money = Clean(Safe(GetMoney)) or me.money
-	return me
-end
-
-local function Remember(where, entries, free, special)
-	local me = Mine()
-	local items = {}
-	for _, entry in ipairs(entries) do items[#items + 1] = { entry.link, entry.count, entry.quality } end
-	me[where] = items
-	me[where .. "Free"] = free.count
-	me[where .. "Special"] = special
-	me[where .. "At"] = time()
-	countsIndex = nil
-end
-
-local function Remembered(name, where)
-	local character = Realm()[name]
-	if not character or type(character[where]) ~= "table" then return nil end
-	local entries = {}
-	for _, item in ipairs(character[where]) do
-		if type(item[1]) == "string" then
-			entries[#entries + 1] = { link = item[1], count = item[2] or 1, quality = item[3], id = IdOf(item[1]) }
-		end
-	end
-	return entries, { count = character[where .. "Free"] or 0 }, character[where .. "Special"] or {}, character
-end
-
-local function ClassHex(class)
-	local colors = _G.CUSTOM_CLASS_COLORS or _G.RAID_CLASS_COLORS
-	local color = colors and class and colors[class]
-	if not color then return ns.SOFT end
-	return ("|cff%02x%02x%02x"):format(color.r * 255, color.g * 255, color.b * 255)
-end
+local Inventory = ns.Inventory
+local Me, Realm, Mine, Remember, Remembered = Inventory.Me, Inventory.Realm, Inventory.Mine, Inventory.Remember,
+	Inventory.Remembered
+local ClassHex = Inventory.ClassHex
 
 local function Ago(at)
 	if type(at) ~= "number" then return nil end
@@ -1010,6 +861,15 @@ local function MakeWindow(kind)
 			end
 		end)
 		win.tabsWord:SetPoint("RIGHT", win.close, "LEFT", -8, 0)
+		-- (buying one more: the game's own bank page, with its price and confirmation; put away again on
+		-- BANKFRAME_CLOSED)
+		function win.Reveal()
+			local frame = _G.BankFrame
+			if not frame then return end
+			revealing = true
+			frame:SetParent(UIParent)
+			win:Hide()
+		end
 		win.tabsText = Text(win, "GameFontHighlightSmall", MUTED_RGB)
 		win.tabsText:SetPoint("TOPLEFT", win, "TOPLEFT", PAD, -HEAD - 4)
 		win.buyWord = Word(win, "", function() if win.buy then win.buy() end end, function(tooltip)
@@ -1051,183 +911,6 @@ local function MakeWindow(kind)
 	tinsert(UISpecialFrames, win:GetName())
 	Place(win)
 	return win
-end
-
--- The bag slots row --------------------------------------------------------------------------------------------------------
-
-local EMPTY_SLOT = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag"
-local PutBag = _G.PutItemInBag or Container.PutItemInBag
-local PickupBag = _G.PickupBagFromSlot or Container.PickupBagFromSlot
-
-local function PutOn(inv)
-	if PutBag then return Safe(PutBag, inv) end
-	if _G.EquipCursorItem then Safe(_G.EquipCursorItem, inv) end
-end
-
--- (the mouse over a bag: the cells holding what is in it stay, the others fade)
-local function Spotlight(win, bag)
-	for _, row in pairs(win.buttons) do
-		for _, button in pairs(row) do
-			local cell, keep = button.sereneCell, bag == nil
-			if cell and not keep then
-				for _, entry in ipairs(cell.slots) do
-					if entry.bag == bag then keep = true break end
-				end
-			end
-			button:SetAlpha((keep or not cell) and 1 or 0.25)
-		end
-	end
-end
-
-local function SlotTip(win, button)
-	local slot = button.slot
-	if not slot or not ns.ShowTip then return end
-	ns.ShowTip(button, function(tooltip)
-		if slot.has then
-			Safe(tooltip.SetInventoryItem, tooltip, "player", slot.inv)
-			if slot.tab then tooltip:AddLine(ns.MUTED .. "In " .. slot.name .. "|r") end
-			local size = NumSlots(slot.bag)
-			if size > 0 then tooltip:AddLine(ns.MUTED .. ("%d of %d free"):format(FreeSlots(slot.bag), size) .. "|r") end
-			if ns.TipHint then
-				ns.TipHint(tooltip, "Drop a bag here: swap them")
-				ns.TipHint(tooltip, "Drag (or click): take it off")
-			end
-		elseif slot.locked then
-			tooltip:AddLine(slot.name, SOFT[1], SOFT[2], SOFT[3])
-			tooltip:AddLine(ns.MUTED .. "Not bought yet|r")
-			if slot.buyable and win.buy then
-				if win.buyCost then tooltip:AddLine(Money(win.buyCost), 1, 1, 1) end
-				if ns.TipHint then ns.TipHint(tooltip, "Click: buy it (on the game's own bank page)") end
-			end
-		else
-			tooltip:AddLine(slot.name, SOFT[1], SOFT[2], SOFT[3])
-			local size = slot.bag and NumSlots(slot.bag) or 0
-			if size > 0 then tooltip:AddLine(ns.MUTED .. ("%d of %d free"):format(FreeSlots(slot.bag), size) .. "|r") end
-			if slot.inv then
-				tooltip:AddLine(ns.MUTED .. (slot.tab and "No bag in it" or "Empty") .. "|r")
-				if ns.TipHint then ns.TipHint(tooltip, "Drop a bag here: put it on") end
-			end
-		end
-	end, "ANCHOR_TOP")
-end
-
-local function SlotButton(win, index)
-	local button = win.slots[index]
-	if button then return button end
-	button = CreateFrame("Button", nil, win)
-	button:SetSize(SLOT, SLOT)
-	button:RegisterForClicks("AnyUp")
-	button:RegisterForDrag("LeftButton")
-	-- (framed like the item cells: a soft grey line, a dark ring inside it, the icon within)
-	local ground = button:CreateTexture(nil, "BACKGROUND")
-	ground:SetAllPoints()
-	ground:SetColorTexture(0, 0, 0, 0.85)
-	button.lines = ns.Hairline(button, { 0.62, 0.62, 0.62, 0.55 })
-	button.icon = button:CreateTexture(nil, "ARTWORK")
-	button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-	button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
-	button.free = Text(button, "NumberFontNormalSmall", SOFT)
-	button.free:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
-	button.plus = Text(button, "GameFontHighlight", MUTED_RGB)
-	button.plus:SetPoint("CENTER")
-	button.plus:SetText("+")
-	local light = button:CreateTexture(nil, "HIGHLIGHT")
-	light:SetAllPoints()
-	light:SetColorTexture(1, 1, 1, 0.08)
-	button:SetScript("OnClick", function(self, mouse)
-		local slot = self.slot
-		if not slot then return end
-		if slot.locked then
-			if slot.buyable and win.buy then win.buy() end
-			return
-		end
-		if not slot.inv then return end
-		if CursorHasItem and CursorHasItem() then return PutOn(slot.inv) end
-		if not slot.has then return end
-		if IsModifiedClick and IsModifiedClick() and HandleModifiedItemClick then
-			local link = Clean(Safe(GetInventoryItemLink, "player", slot.inv))
-			if link and Safe(HandleModifiedItemClick, link) then return end
-		end
-		if mouse == "LeftButton" and PickupBag then Safe(PickupBag, slot.inv) end
-	end)
-	button:SetScript("OnDragStart", function(self)
-		local slot = self.slot
-		if slot and slot.has and PickupBag then Safe(PickupBag, slot.inv) end
-	end)
-	button:SetScript("OnReceiveDrag", function(self)
-		local slot = self.slot
-		if slot and slot.inv and not slot.locked then PutOn(slot.inv) end
-	end)
-	button:SetScript("OnEnter", function(self)
-		SlotTip(win, self)
-		local slot = self.slot
-		if slot and slot.bag and (slot.has or (slot.tab and not slot.locked)) then Spotlight(win, slot.bag) end
-	end)
-	button:SetScript("OnLeave", function()
-		if ns.HideTip then ns.HideTip() else GameTooltip:Hide() end
-		Spotlight(win, nil)
-	end)
-	win.slots[index] = button
-	return button
-end
-
-local function HideSlots(win, from)
-	for index = from or 1, #win.slots do
-		win.slots[index]:Hide()
-		win.slots[index].slot = nil
-	end
-end
-
--- The row under the header: one button per bag slot, its bag's icon and its free room.
-local function PlaceSlots(win, list)
-	for index, slot in ipairs(list) do
-		ReadSlot(slot)
-		local button = SlotButton(win, index)
-		button.slot = slot
-		button:ClearAllPoints()
-		button:SetPoint("TOPLEFT", win, "TOPLEFT", PAD + (index - 1) * (SLOT + GAP), -HEAD - 4)
-		if slot.has then
-			button.icon:SetTexture(slot.has)
-			button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-			button.icon:SetAlpha(1)
-			button.icon:SetDesaturated(slot.busy)
-			local size = NumSlots(slot.bag)
-			button.free:SetText(size > 0 and FreeSlots(slot.bag) or "")
-		else
-			button.icon:SetTexture(EMPTY_SLOT)
-			button.icon:SetTexCoord(0, 1, 0, 1)
-			button.icon:SetAlpha(slot.locked and 0.08 or 0.3)
-			button.icon:SetDesaturated(true)
-			local size = (slot.tab and not slot.locked and slot.bag) and NumSlots(slot.bag) or 0
-			button.free:SetText(size > 0 and FreeSlots(slot.bag) or "")
-		end
-		button.plus:SetShown(slot.buyable and win.buy ~= nil or false)
-		local faint = slot.locked and not slot.buyable
-		for _, side in ipairs({ "top", "bottom", "left", "right" }) do button.lines[side]:SetAlpha(faint and 0.35 or 1) end
-		button.lines:Fit()
-		button:Show()
-	end
-	HideSlots(win, #list + 1)
-end
-
--- (after a refresh: the tooltip and the faded cells follow what changed under the mouse)
-local function SlotsHover(win)
-	for _, button in ipairs(win.slots) do
-		if button.slot and button:IsShown() and ns.Over(button) then
-			return button:GetScript("OnEnter")(button)
-		end
-	end
-	Spotlight(win, nil)
-end
-
--- The bags' row: shown with "bags", for your own bags at hand.
-local function SlotsRow(win, live)
-	win.rowHeight = 0
-	win.slotsWord:SetShown(live)
-	win.slotsWord:SetWords(win.showSlots and live and "|cffffd100bags|r" or "bags")
-	if not (live and win.showSlots) then return HideSlots(win) end
-	PlaceSlots(win, BagSlots())
-	win.rowHeight = SLOTS_ROW
 end
 
 -- Making room: the cheapest item, to delete -------------------------------------------------------------------------------
@@ -1547,87 +1230,6 @@ local function Layout(win, sections, live, free, special, character)
 	win:SetSize(width, -y + FOOT)
 end
 
--- The bank's tabs row: how full each is, and one more to buy (on the game's own page: its confirmation, its price).
--- A bank with bag slots: the slots instead (the next to buy among them).
-local function TabsRow(win, live)
-	win.rowHeight = 0
-	win.tabsWord:SetShown(live)
-	win.tabsText:Hide()
-	win.buyWord:Hide()
-	win.buy, win.buyCost = nil, nil
-	if not live then return HideSlots(win) end
-	local slots = BankBagSlots()
-	win.bankBags = slots[1] ~= nil
-	local words = {}
-	local tabs = BankTabs()
-	local named = {}
-	for _, tab in ipairs(tabs) do named[tab.id] = tab.name end
-	for index, id in ipairs(BankIDs()) do
-		local size = NumSlots(id)
-		if size > 0 then
-			local free = FreeSlots(id)
-			local name = named[id] or (id == (BANK_CONTAINER or -1) and "Bank") or ("Bag " .. (index - 1))
-			words[#words + 1] = ("%s %d/%d"):format(name, size - free, size)
-		end
-	end
-	-- (a bank with no room at all yet: the row shows itself, to buy the first tab)
-	if not words[1] then win.showTabs = true end
-	local word = win.bankBags and "bags" or "tabs"
-	win.tabsWord:SetWords(win.showTabs and ("|cffffd100" .. word .. "|r") or word)
-	if not win.showTabs then return HideSlots(win) end
-	-- (one more: a tab of the newer bank, a bag slot of the older)
-	local types = Enum and Enum.BankType
-	local cost, what
-	if not win.bankBags then
-		if types and C_Bank and Clean(Safe(C_Bank.CanPurchaseBankTab, types.Character)) then
-			local data = C_Bank.FetchNextPurchasableBankTabData and Safe(C_Bank.FetchNextPurchasableBankTabData, types.Character)
-			cost = type(data) == "table" and Clean(data.tabCost or data.cost) or nil -- (whichever key the client fills)
-			what = "tab"
-		end
-	else
-		local bought, full = Safe(_G.GetNumBankSlots)
-		if Clean(full) == false then
-			cost, what = Clean(Safe(_G.GetBankSlotCost, bought)), "bag slot"
-		end
-	end
-	if what then
-		win.buyTip, win.buyCost = "Buy a " .. what, cost
-		win.buyWord:SetWords("buy a " .. what .. (cost and ("  " .. Money(cost)) or ""))
-		win.buy = function()
-			local frame = _G.BankFrame
-			if not frame then return end
-			-- (the game's own bank page, with its price and confirmation; put away again on BANKFRAME_CLOSED)
-			revealing = true
-			frame:SetParent(UIParent)
-			win:Hide()
-		end
-	end
-	if win.bankBags then
-		-- (the slots, the one to buy among them: a "+")
-		PlaceSlots(win, slots)
-		win.rowHeight = SLOTS_ROW
-		return
-	end
-	-- (tabs holding bags: a slot for each, like the bags' row; the next tab to buy: a "+")
-	local tabSlots = BankTabSlots()
-	win.tabBags = tabSlots[1] ~= nil
-	if win.tabBags then
-		if what == "tab" then
-			tabSlots[#tabSlots + 1] = { tab = true, tabInv = false, locked = true, buyable = true,
-				name = "Tab " .. (#tabSlots + 1) }
-		end
-		PlaceSlots(win, tabSlots)
-		win.rowHeight = SLOTS_ROW
-		if what then win.buyWord:Show() end
-		return
-	end
-	HideSlots(win)
-	win.tabsText:SetText(words[1] and table.concat(words, "  ·  ") or "No tabs yet")
-	win.tabsText:Show()
-	win.rowHeight = TABS_ROW
-	if what then win.buyWord:Show() end
-end
-
 Refresh = function(win)
 	if not win or not win:IsShown() then return end
 	if win.moving then return end -- (being dragged: this refresh is dropped, not deferred)
@@ -1657,10 +1259,10 @@ Refresh = function(win)
 	if win.bankWord then
 		win.bankWord:SetWords((bank and bank:IsShown()) and "|cffffd100bank|r" or "bank")
 	end
-	if win.kind == "bank" then TabsRow(win, live) else SlotsRow(win, live) end
+	if win.kind == "bank" then ns.BankTabsRow(win, live) else ns.BagSlotsRow(win, live) end
 	Suggest(win, live)
 	Layout(win, Sections(entries), live, free, special, character)
-	SlotsHover(win)
+	ns.BagSlotsHover(win)
 end
 
 -- The bank: open from anywhere (remembered), or at a banker (live).
@@ -1722,76 +1324,6 @@ local function HideGameWindows()
 	for _, frame in ipairs(GameBagFrames()) do
 		hooksecurefunc(frame, "Show", Sync)
 		hooksecurefunc(frame, "Hide", Sync)
-	end
-end
-
--- Counts in item tooltips -------------------------------------------------------------------------------------------------
-
-local function Index()
-	if countsIndex then return countsIndex end
-	countsIndex = {}
-	for name, character in pairs(Realm()) do
-		for _, where in ipairs({ "bags", "bank" }) do
-			for _, item in ipairs(type(character[where]) == "table" and character[where] or {}) do
-				local id = IdOf(item[1])
-				if id then
-					countsIndex[id] = countsIndex[id] or {}
-					local counts = countsIndex[id][name] or { bags = 0, bank = 0 }
-					countsIndex[id][name] = counts
-					counts[where] = counts[where] + (item[2] or 1)
-				end
-			end
-		end
-	end
-	return countsIndex
-end
-
-local function CountWords(counts)
-	local words = {}
-	if counts.bags > 0 then words[#words + 1] = "bags " .. counts.bags end
-	if counts.bank > 0 then words[#words + 1] = "bank " .. counts.bank end
-	return table.concat(words, "  ·  ")
-end
-
-local function OnItemTooltip(tooltip, data)
-	if not ns.On("bags") or not ns.On("bagCounts") then return end
-	if tooltip ~= GameTooltip and tooltip ~= _G.ItemRefTooltip then return end
-	local id = type(data) == "table" and Clean(data.id)
-	if type(id) ~= "number" then
-		local _, link = Safe(tooltip.GetItem, tooltip)
-		id = IdOf(Clean(link))
-	end
-	local holders = id and Index()[id]
-	if not holders then return end
-	local _, me = Me()
-	local others = {}
-	for name in pairs(holders) do
-		if name ~= me then others[#others + 1] = name end
-	end
-	local mine = holders[me]
-	-- (only what you would not see anyway: the bank, or your other characters)
-	if not others[1] and not (mine and mine.bank > 0) then return end
-	table.sort(others)
-	if mine then table.insert(others, 1, me) end
-	tooltip:AddLine(" ")
-	for _, name in ipairs(others) do
-		local character = Realm()[name] or {}
-		tooltip:AddDoubleLine(ClassHex(character.class) .. name .. "|r", ns.MUTED .. CountWords(holders[name]) .. "|r")
-	end
-	if (tonumber(Clean(tooltip.shownMoneyFrames)) or 0) == 0 then tooltip:Show() end
-end
-
-local function HookTooltips()
-	local processor = _G.TooltipDataProcessor
-	local types = Enum and Enum.TooltipDataType
-	if processor and processor.AddTooltipPostCall and types and types.Item then
-		pcall(processor.AddTooltipPostCall, types.Item, OnItemTooltip)
-		return
-	end
-	for _, tooltip in ipairs({ GameTooltip, _G.ItemRefTooltip }) do
-		if tooltip and tooltip.HasScript and Safe(tooltip.HasScript, tooltip, "OnTooltipSetItem") then
-			tooltip:HookScript("OnTooltipSetItem", function(self) OnItemTooltip(self) end)
-		end
 	end
 end
 
@@ -1901,7 +1433,6 @@ local function Init()
 		if bags:IsShown() then Dirty(bags) end
 	end)
 	HideGameWindows()
-	HookTooltips()
 	local events = CreateFrame("Frame")
 	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "BAG_UPDATE_COOLDOWN", "BAG_NEW_ITEMS_UPDATED",
 		"PLAYER_MONEY", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED", "BANK_TABS_CHANGED",
@@ -1941,17 +1472,11 @@ function ns.BagsDebug()
 	if not bags then return ns.Print("bags: off") end
 	ns.Print(("bags: shown %s, game's open %s, protected buttons %s, bank live %s, buttons made %d"):format(
 		tostring(bags:IsShown()), tostring(GameBagsOpen()), tostring(protectedButtons), tostring(bankLive), made))
-	local tabs = {}
-	for index, tab in ipairs(BankTabs()) do
-		local types = Enum and Enum.BankType
-		local byIndex = TabInvSlot and types and Clean(Safe(TabInvSlot, types.Character, index))
-		local byId = TabInvSlot and types and Clean(Safe(TabInvSlot, types.Character, tab.id))
-		tabs[#tabs + 1] = ("%d (bag %s): slot %s / by id %s, %d slots"):format(index, tostring(tab.id), tostring(byIndex),
-			tostring(byId), NumSlots(tab.id))
-	end
-	ns.Print("bank tabs: " .. (tabs[1] and table.concat(tabs, "; ") or "none") .. (TabInvSlot and "" or " (no bag slots API)"))
+	if ns.BankTabsDebug then ns.BankTabsDebug() end
 end
 
 ns.BagsSections = Sections -- (tests)
+-- (the windows' measures and words, for the rows under their headers: BagSlots.lua)
+ns.bags = { PAD = PAD, HEAD = HEAD, GAP = GAP, Text = Text }
 
 table.insert(ns.modules, { init = Init, refresh = OnRefresh })

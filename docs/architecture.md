@@ -18,7 +18,7 @@ Most files start by copying the helpers they use into locals, e.g. `local Safe, 
 table.insert(ns.modules, { init = Init, refresh = Refresh })
 ```
 
-`Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register.
+`Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register. Nor do `BagSlots.lua` and `UnitHeals.lua`, which Bags and Units drive.
 
 On `ADDON_LOADED`, Core lets go of every saved key that is neither a setting nor in `ns.STATE` (below), fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
 
@@ -188,9 +188,9 @@ It also fades `SereneAuras`, `SereneDebuffs`, `SereneTopBar` and `SereneMenuBar`
 Two libraries answer questions several files need to agree on, so those files ask them instead of reading the game again:
 
 - `ns.Actions` (Actions.lua) knows the action buttons and their slots: which buttons exist (whether or not Serene's action bars are on), the slot a button shows, what a slot holds (`What`, in a stable form that BarUse saves), what it casts, and whether it's usable, in range, in use, on cooldown or procced. ActionBars, Ready, Hints, BarCooldowns, BarPing, BarUse, BarSets, Ranks and Reagents use it. See [action-bars.md](action-bars.md).
-- `ns.Items` (Items.lua) reads bag slots and decides an item's section in the bags. `IsJunk` means "shown under Junk", so the merchant sells exactly what the bags show there. It also gives sell prices and coin text. Bags, Vendor, Merchant and Tooltip use it. See [bags-merchant.md](bags-merchant.md).
+- `ns.Items` (Items.lua) reads bag slots and the bank's containers and decides an item's section in the bags. `IsJunk` means "shown under Junk", so the merchant sells exactly what the bags show there. It also gives sell prices and coin text. Bags, Vendor, Merchant and Tooltip use it. See [bags-merchant.md](bags-merchant.md).
 
-Neither changes anything; they only read.
+Neither changes anything; they only read. `ns.Inventory` (Inventory.lua) is the store beside them: what every character carries, kept by Bags and read by Bags and the item tooltips.
 
 The other exports:
 
@@ -209,7 +209,8 @@ The other exports:
 | `ns.TipHint` | Tooltip | Bags, ChatCard, ChatLines, Minimap, TopBar |
 | `ns.TipHints`, `ns.TipLater` | Tooltip | Merchant |
 | `ns.PlayerPowerBar`, `ns.PlayerPortrait` | Units | Regen |
-| `ns.CastColor` | Units | CastBar |
+| `ns.UnitHeals` | UnitHeals | Units |
+| `ns.DressUnitCast`, `ns.LayoutUnitCast` | CastBar | Units |
 | `ns.AuraStyle`, `ns.SereneAuraFrame`, `ns.AuraContainers` | Auras | AuraFrame, UnitAuras |
 | `ns.AURA_FONT_AUTO` | Auras | AuraFrame, Settings |
 | `ns.AuraKindColors` | AuraFrame | UnitAuras |
@@ -217,6 +218,8 @@ The other exports:
 | `ns.FormatMatch` | ChatLoot | Chat, ChatCard |
 | `ns.chat` | Chat | ChatLines, ChatShell (only exists if `chat` was on at login) |
 | `ns.PlaceBank` | Bags | Vendor |
+| `ns.bags` | Bags | BagSlots (the windows' measures and `Text`) |
+| `ns.BagSlotsRow`, `ns.BankTabsRow`, `ns.BagSlotsHover`, `ns.BankTabsDebug` | BagSlots | Bags |
 | `ns.PlaceMerchant` | Vendor | Bags |
 | `ns.MerchantBuyStack` | Merchant | Vendor |
 | `ns.CAST_WIDTH_GAME`, `ns.CAST_FONT_AUTO` | CastBar | Settings |

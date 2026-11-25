@@ -30,9 +30,9 @@ At the start of any task touching code:
    |---|---|
    | Chat, ChatLoot, ChatLines, ChatCard, ChatShell | [docs/chat.md](docs/chat.md) |
    | Tooltip, Toasts | [docs/tooltips-toasts.md](docs/tooltips-toasts.md) |
-   | Units, CastBar, Swing, Regen, Experience | [docs/units.md](docs/units.md) |
+   | Units, UnitHeals, CastBar, Swing, Regen, Experience | [docs/units.md](docs/units.md) |
    | Auras, AuraFrame, UnitAuras | [docs/auras.md](docs/auras.md) |
-   | Items, Bags, Vendor, Merchant | [docs/bags-merchant.md](docs/bags-merchant.md) |
+   | Items, Inventory, Bags, BagSlots, Vendor, Merchant | [docs/bags-merchant.md](docs/bags-merchant.md) |
    | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse | [docs/action-bars.md](docs/action-bars.md) |
    | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings | [docs/shell.md](docs/shell.md) |
    | A game API, a frame of the game's, what is secret, textures | [docs/forever-client.md](docs/forever-client.md) |

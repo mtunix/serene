@@ -6,7 +6,7 @@ Health, power and cast numbers can be secret in combat, and these files never re
 
 ## Units.lua
 
-Units.lua restyles the frames listed in `FRAMES`: the player, pet, target and its target, focus and its target. Each becomes a card of flat bars on glass with a round portrait at one end, the name above the bars and the level at the end of the name row. Elites and rares get a small mark and, optionally, the game's dragon fitted around the smaller portrait. The target's and focus's cast bars become slim lines under their cards, and heal prediction is flattened to match the bars.
+Units.lua restyles the frames listed in `FRAMES`: the player, pet, target and its target, focus and its target. Each becomes a card of flat bars on glass with a round portrait at one end, the name above the bars and the level at the end of the name row. Elites and rares get a small mark and, optionally, the game's dragon fitted around the smaller portrait. Two parts of a card are drawn by other files: the heal prediction on its health bar by UnitHeals.lua, and the target's and focus's cast bars under their cards by CastBar.lua.
 
 ### How it runs
 
@@ -44,19 +44,11 @@ The pet's health bar is anchored to the pet's portrait, so anchoring the portrai
 
 The target of target is a secure unit frame, so it can only be moved out of combat. `MoveCompact` returns early in combat and sets `d.later`; `PLAYER_REGEN_ENABLED` marks those cards dirty and they're placed then. It's anchored to TargetFrame itself rather than to anything Serene moves, since a protected frame must never hang from something that moves in a fight.
 
-### Elite dragon, PvP crest, heal prediction
+### Elite dragon and PvP crest
 
 `Dragon` and `FitDragon` keep the game's elite or rare dragon (`BossPortraitFrameTexture`) on target and focus (`CLASSIFIED`). They measure the game's portrait before anything moves, then re-centre the dragon on Serene's smaller portrait at the same relative offset and scale it by the size ratio. It's only shown on the right-hand side, and `unitElite` turns it off.
 
 `FindEmblems` finds the PvP crest by texture name (pvp, alliance, horde, prestige, honorsystem) and runs twice after a unit change, because the game sets the crest a moment later. `PlaceEmblems` pins it to the portrait's rim at 45 degrees; left alone, it would stay where the game's larger portrait used to be.
-
-`Segments` flattens the heal prediction parts (MyHealPrediction, OtherHealPrediction, HealAbsorb, TotalAbsorb) and strips every mask except each segment's own `FillMask`. On reversed bars the game's segments would grow the wrong way, outside the bar, so `Hang` re-anchors them to grow left and `Mirror` flips their glows and shadows.
-
-The overheal mark is a bright line with a fade at the full end of the bar, shown while one of your heals would overflow it. `Overheal` gets that from `CreateUnitHealPredictionCalculator` and `UnitGetDetailedHealPrediction`. The answer can be secret, and a secret can't even be compared with `~= nil`, so it goes straight into `SetAlphaFromBoolean` on the mark's holder frame. The mark is shown and hidden through that frame's alpha rather than the texture's, because the game re-sets the texture's gradient on relayout, which would bring it back. A hook on `UnitFrameHealPredictionBars_Update` re-checks the mark whenever the game updates its prediction.
-
-### The target's cast bar
-
-`DressCast` turns the target's and focus's cast bars into a slim line under the bars, beside the target of target when that's shown. Its colour comes from `CastColor`: newer cast bars say what they show in `barType`, older ones only colour the bar, so the raw colour is classified (red for a failed cast, grey for one that can't be interrupted, green for a channel). `CastColor` is exported as `ns.CastColor` so your own cast bar matches.
 
 ### Settings and exports
 
@@ -67,13 +59,25 @@ The overheal mark is a bright line with a fade at the full end of the bar, shown
 | `unitElite` | the elite and rare dragon |
 | `unitBorder` | `"line"` or `"none"`; CastBar reads it too |
 
-`ns.PlayerPowerBar()` and `ns.PlayerPortrait()` give Regen the player's power bar (even with `units` off) and portrait (nil unless dressed with portraits on). `ns.UnitsDump(frame)` backs `/serene debug units <frame>`: it writes every region and child of a frame, with size, position, alpha, art and anchor, into `SereneDB.unitsDump`, which you read from the SavedVariables file after a `/reload`. The badge, crest and cast-colour detection are all heuristics, and `d.measured` and `d.healthAt` are taken once, so a client update that renames atlases or moves parts can break them without an error.
+`ns.PlayerPowerBar()` and `ns.PlayerPortrait()` give Regen the player's power bar (even with `units` off) and portrait (nil unless dressed with portraits on). Units.lua hands each card's record, `d`, to `ns.UnitHeals.Dress` and, for target and focus, to `ns.DressUnitCast`, and works out where the cast bar's row goes under the card (`LayoutCast`: beside the target of target when that's shown) before `ns.LayoutUnitCast` draws it there. `ns.UnitsDump(frame)` backs `/serene debug units <frame>`: it writes every region and child of a frame, with size, position, alpha, art and anchor, into `SereneDB.unitsDump`, which you read from the SavedVariables file after a `/reload`. The badge and crest detection are heuristics, and `d.measured` and `d.healthAt` are taken once, so a client update that renames atlases or moves parts can break them without an error.
+
+## UnitHeals.lua
+
+UnitHeals.lua takes over a card's health bar's heal prediction once Units.lua has dressed the card (`ns.UnitHeals.Dress(d)`), and shows or hides the overheal mark each time Units looks at the card's colours, and whenever the game updates its prediction (`ns.UnitHeals.Overheal(d, unit)`). `Dress` also gives the card its `d:Segments()` method, which Units calls when the bars change direction.
+
+`Segments` flattens the heal prediction parts (MyHealPrediction, OtherHealPrediction, HealAbsorb, TotalAbsorb) and strips every mask except each segment's own `FillMask`. On reversed bars the game's segments would grow the wrong way, outside the bar, so `Hang` re-anchors them to grow left and `Mirror` flips their glows and shadows.
+
+The overheal mark is a bright line with a fade at the full end of the bar, shown while one of your heals would overflow it. `Overheal` gets that from `CreateUnitHealPredictionCalculator` and `UnitGetDetailedHealPrediction`. The answer can be secret, and a secret can't even be compared with `~= nil`, so it goes straight into `SetAlphaFromBoolean` on the mark's holder frame. The mark is shown and hidden through that frame's alpha rather than the texture's, because the game re-sets the texture's gradient on relayout, which would bring it back. A hook on `UnitFrameHealPredictionBars_Update` re-checks the mark whenever the game updates its prediction.
 
 ## CastBar.lua
 
 CastBar restyles your own cast bar (`PlayerCastingBarFrame`), the pet and vehicle bars, and any frame Edit Mode registers as a cast bar system. Each becomes a slim flat bar on glass with the spell's icon at the start, the name inside, the time on the right and a soft spark at the moving end.
 
-All of the bar's art is reparented to `hidden`, a frame that's never shown. Reparenting matters here: the cast bar's flash and glow animations keep setting their textures' alpha, but nothing under a hidden parent is drawn whatever its alpha. Child frames go to alpha 0, except Edit Mode's `Selection`, which you need to drag the bar. The game paints the bar and its fill for each cast, so the colour is re-applied from hooks on both, using `ns.CastColor` from Units. Layout re-runs from `SetSize`, `SetHeight` and `SetLook` hooks, the last because Edit Mode's "lock to player frame" switches the bar to another look. Position and scale stay Edit Mode's; `c.gameWidth` remembers Edit Mode's width for when `castWidth` is 0. Nothing protected is touched, so it all works in combat.
+All of the bar's art is reparented to `hidden`, a frame that's never shown. Reparenting matters here: the cast bar's flash and glow animations keep setting their textures' alpha, but nothing under a hidden parent is drawn whatever its alpha. Child frames go to alpha 0, except Edit Mode's `Selection`, which you need to drag the bar. The game paints the bar and its fill for each cast, so the colour is re-applied from hooks on both, using `CastColor` (below). Layout re-runs from `SetSize`, `SetHeight` and `SetLook` hooks, the last because Edit Mode's "lock to player frame" switches the bar to another look. Position and scale stay Edit Mode's; `c.gameWidth` remembers Edit Mode's width for when `castWidth` is 0. Nothing protected is touched, so it all works in combat.
+
+### The target's and focus's cast bars
+
+`ns.DressUnitCast(d, relayout)` turns the target's and focus's cast bars into a slim line under their cards; Units.lua calls it for each card that has a target of its own, with the function that places the row again when the game moves the bar. `ns.LayoutUnitCast(d, narrow, y)` draws it in the row Units.lua worked out: `narrow` is the room left for the target of target, `y` the row's top. These bars follow `units`, not `castBar`. Its colour comes from `CastColor`: newer cast bars say what they show in `barType`, older ones only colour the bar, so the raw colour is classified (red for a failed cast, grey for one that can't be interrupted, green for a channel). Your own cast bar uses the same `CastColor`, so the two always match.
 
 Settings: `castBar` (reload), `castHeight`, `castWidth` (0 for Edit Mode's width; `ns.CAST_WIDTH_GAME` is where the panel's slider shows "Edit Mode's"), `castIcon`, `castText` (`"in"`, `"under"` or `"none"`) and `castFont` (0 for automatic, shown in the panel as `ns.CAST_FONT_AUTO`).
 

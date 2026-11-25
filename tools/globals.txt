@@ -31,7 +31,7 @@ ReloadUI SaveBindings SetBinding SetCVar StaticPopup_Show UnitAffectingCombat Un
 UnitCanAttack UnitCastingInfo UnitChannelInfo UnitClass UnitClassification UnitDebuff UnitExists
 UnitFactionGroup UnitFrameHealPredictionBars_Update UnitGetDetailedHealPrediction UnitHealth UnitHealthMax
 UnitInVehicle UnitIsAFK UnitIsConnected UnitIsDead UnitIsDeadOrGhost UnitIsDND UnitIsPlayer UnitIsTapDenied
-UnitIsUnit UnitLevel UnitName UnitOnTaxi UnitPower UnitPowerMax UnitPowerType UnitRace UnitRangedDamage
+UnitLevel UnitName UnitOnTaxi UnitPower UnitPowerMax UnitPowerType UnitRace UnitRangedDamage
 UnitReaction UnitSex UnitXP UnitXPMax UpdateAddOnMemoryUsage
 
 # The game's frames, fonts, tables and mixins

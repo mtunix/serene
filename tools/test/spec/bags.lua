@@ -191,6 +191,51 @@ test("an item's tooltip: how many another character has", function()
 	clean()
 end)
 
+-- The rows under the header (BagSlots.lua) ------------------------------------------------------------------------------
+
+test("\"bags\": a row of your bag slots, each with its bag's icon and the room left in it", function()
+	wow.bags[0] = { size = 16, [1] = { id = 2589, count = 5 } }
+	wow.bags[1] = { size = 6, [1] = { id = 159, count = 3 } }
+	wow.equipped = { [20] = { icon = 133622 } } -- (bag 1, in inventory slot 20)
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	no(SereneBags.slots[1] and SereneBags.slots[1]:IsShown(), "hidden at first")
+	SereneBags.slotsWord:GetScript("OnClick")(SereneBags.slotsWord, "LeftButton")
+	local first = SereneBags.slots[1]
+	ok(first and first:IsShown(), "shown")
+	eq(first.slot.bag, 1)
+	eq(first.icon:GetTexture(), 133622, "its bag's icon")
+	eq(first.free:GetText(), 5, "five of six free")
+	ok(SereneBags.slots[2]:IsShown(), "an empty bag slot shown too")
+	eq(SereneBags.slots[2].slot.has, nil, "nothing in it")
+	SereneBags.slotsWord:GetScript("OnClick")(SereneBags.slotsWord, "LeftButton")
+	no(first:IsShown(), "hidden again")
+	clean()
+end)
+
+test("at a banker, \"tabs\": how full each tab is, and buying one more on the game's own bank page", function()
+	C_Bank.FetchPurchasedBankTabData = function() return { { ID = 6, name = "Tab 1" } } end
+	C_Bank.CanPurchaseBankTab = function() return true end
+	C_Bank.FetchNextPurchasableBankTabData = function() return { tabCost = 100000 } end
+	wow.bags[6] = { size = 10, [1] = { id = 2589, count = 5 }, [2] = { id = 2592, count = 2 } }
+	Login()
+	wow.fire("BANKFRAME_OPENED")
+	wow.advance(0.2)
+	ok(SereneBank:IsShown(), "the bank")
+	SereneBank.tabsWord:GetScript("OnClick")(SereneBank.tabsWord, "LeftButton")
+	ok(SereneBank.tabsText:IsShown(), "the tabs as words")
+	eq(SereneBank.tabsText:GetText(), "Tab 1 2/10")
+	ok(SereneBank.buyWord:IsShown(), "one more to buy")
+	ok(SereneBank.buyWord.text:GetText():find("buy a tab"), "a tab")
+	SereneBank.buyWord:GetScript("OnClick")(SereneBank.buyWord, "LeftButton")
+	eq(BankFrame:GetParent(), UIParent, "the game's own bank page shown")
+	no(SereneBank:IsShown(), "Serene's bank away meanwhile")
+	wow.fire("BANKFRAME_CLOSED")
+	ok(BankFrame:GetParent() ~= UIParent, "the game's bank out of sight again")
+	clean()
+end)
+
 test("bags switched off: no bags made, the game's untouched", function()
 	wow.login({ bags = false })
 	wow.advance(1)

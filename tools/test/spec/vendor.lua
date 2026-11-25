@@ -410,3 +410,58 @@ test("Alt-click: the vendor switch off, nothing bought", function()
 	ns.MerchantBuyStack(1)
 	eq(Bought(), {})
 end)
+
+test("Alt-click on the game's merchant buttons: a stack on the buy tab, nothing on buyback", function()
+	wow.merchant.items = { { id = 159, price = 25, stack = 1 } }
+	Login()
+	Visit()
+	local button = MerchantItem1ItemButton
+	button:SetID(1)
+	wow.alt = true
+	button:_Fire("OnClick", "LeftButton")
+	eq(Bought(), { 20 }, "the buy tab")
+	MerchantFrame.selectedTab = 2
+	button:_Fire("OnClick", "LeftButton")
+	eq(Bought(), { 20 }, "buyback: the button buys back, nothing more here")
+	wow.alt = nil
+end)
+
+test("paid with tokens or items: no stack, the game's own buying stays", function()
+	wow.merchant.items = { { id = 159, price = 0, stack = 1, extended = true } }
+	Login()
+	Visit()
+	ns.MerchantBuyStack(1)
+	eq(Bought(), {})
+end)
+
+test("an expensive stack, the merchant's goods changed before the answer: nothing bought", function()
+	wow.merchant.items = { { id = 159, price = 100000, stack = 1 } }
+	wow.money = 100000000
+	Login()
+	Visit()
+	ns.MerchantBuyStack(1)
+	wow.merchant.items = { { id = 2512, price = 100000, stack = 1 } }
+	StaticPopupDialogs.SERENE_MERCHANT_STACK.OnAccept(nil, wow.popup.data)
+	eq(Bought(), {})
+end)
+
+test("the how-many popup: a Stack button for a merchant's item, buying a stack; none for the bags' split", function()
+	wow.merchant.items = { { id = 159, price = 25, stack = 1 } }
+	Login()
+	Visit()
+	MerchantItem1ItemButton:SetID(1)
+	StackSplitFrame:Hide()
+	StackSplitFrame.owner = MerchantItem1ItemButton
+	StackSplitFrame:Show()
+	ok(SereneStackSplitStackButton:IsShown(), "a merchant's item")
+	SereneStackSplitStackButton:GetScript("OnClick")(SereneStackSplitStackButton)
+	eq(Bought(), { 20 }, "a stack bought")
+	no(StackSplitFrame:IsShown(), "the popup closed")
+	-- (a bag's item button: its ID is its slot, which a merchant's index could be mistaken for)
+	local bagItem = CreateFrame("Button", "ContainerFrame1Item1", UIParent)
+	bagItem:SetID(1)
+	StackSplitFrame.owner = bagItem
+	StackSplitFrame:Show()
+	no(SereneStackSplitStackButton:IsShown(), "the bags' split")
+	clean()
+end)

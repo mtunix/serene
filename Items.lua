@@ -4,6 +4,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- Items in your bags, read and sorted in one place for Bags.lua (the windows, "make room"), Vendor.lua (the junk
 -- sold, the merchant's window), Merchant.lua and Tooltip.lua (prices). Only reading: nothing here moves an item.
 --   ns.Items.Bags(), NumSlots(bag)    your bags' ids (with the reagent bag and the keyring, where the game has them)
+--   BankBags(), BankTabs()            the bank's containers (its tabs, or its own slots and bags); its tabs
+--   FreeSlots(bag)                    the room left in a bag, and its family (what kind of bag it is)
 --   Slot(bag, slot)                   what is in a slot: { bag, slot, link, id, icon, count, quality, locked,
 --                                     quest, noValue }, or nil
 --   Describe(entry)                   its class, equip slot, name, whether its stacks merge
@@ -48,6 +50,35 @@ end
 
 function Items.NumSlots(bag)
 	return Clean(Safe(Container.GetContainerNumSlots or _G.GetContainerNumSlots, bag)) or 0
+end
+
+function Items.FreeSlots(bag)
+	local free, family = Safe(Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots, bag)
+	return Clean(free) or 0, Clean(family) or 0
+end
+
+-- Your character's bank tabs: { id, name }, in order.
+function Items.BankTabs()
+	local types = Enum and Enum.BankType
+	local tabs = types and C_Bank and C_Bank.FetchPurchasedBankTabData and Safe(C_Bank.FetchPurchasedBankTabData, types.Character)
+	local list = {}
+	for _, tab in ipairs(type(tabs) == "table" and tabs or {}) do
+		local id = Clean(tab.ID)
+		if id then list[#list + 1] = { id = id, name = Clean(tab.name) } end
+	end
+	return list
+end
+
+-- Every container of the bank: your character's tabs; a bank of the older kind: its own slots and its bags.
+function Items.BankBags()
+	local list = {}
+	for _, tab in ipairs(Items.BankTabs()) do list[#list + 1] = tab.id end
+	if not list[1] then
+		list[1] = BANK_CONTAINER or -1
+		local first = Enum and Enum.BagIndex and Enum.BagIndex.BankBag_1 or (NUM_BAG_SLOTS or 4) + 1
+		for bag = first, first + (NUM_BANKBAGSLOTS or 7) - 1 do list[#list + 1] = bag end
+	end
+	return list
 end
 
 function Items.Slot(bag, slot)
