@@ -71,7 +71,7 @@ Run from the addon folder. Both tools need `lupa` and `luaparser`, kept outside 
 ```bash
 pip install --target ~/.cache/serene-tools/py lupa luaparser   # once
 
-python3 tools/check.py                    # parse errors, unknown globals, locals used early, accidental globals
+python3 tools/check.py                    # parse errors, unknown globals, locals used early, accidental globals, dead code
 python3 tools/test/run.py                 # every spec
 python3 tools/test/run.py loot bags       # specs whose file name has one of these words
 python3 tools/test/run.py -k roll         # tests whose name has this
@@ -118,7 +118,8 @@ Serene's comments are part of its record of what was learnt. Follow the house st
   do arithmetic on, or index a value that may be secret. "Unknown" is never a fact: don't dim, glow or count on nil.
 - **Locals before use.** A local used above its definition is nil at call time; `tools/check.py` reports it.
 - **Settings** live in `ns.DEFAULTS` in `Core.lua`, each with a one-line comment (a word setting's comment lists its
-  quoted choices). Saved state that isn't a setting never reuses a setting's key; `spec/settings.lua` checks this.
+  quoted choices). Saved state that isn't a setting goes in `ns.STATE` (any other saved key is dropped at login) and
+  never reuses a setting's key; `spec/settings.lua` checks both.
 - **Restyle the game's frames, don't replace them.** Ask the user before replacing another game frame.
 - **Never pass the `"TRILINEAR"` filter to `SetTexture`**: it crashes this client on login.
 - **The user likes to be interviewed** with a few concrete questions before a big feature.

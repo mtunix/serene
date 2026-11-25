@@ -20,7 +20,7 @@ table.insert(ns.modules, { init = Init, refresh = Refresh })
 
 `Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register.
 
-On `ADDON_LOADED`, Core fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
+On `ADDON_LOADED`, Core lets go of every saved key that is neither a setting nor in `ns.STATE` (below), fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
 
 On `PLAYER_LOGIN`, Core calls each module's `init` in TOC order, each inside `pcall`. A module that fails prints its error in red and the rest carry on. `init` builds frames and installs hooks; it runs once. `refresh` is optional and re-applies settings. `ns.Refresh()` calls every module's `refresh` (also inside `pcall`) and runs after every `/serene` switch and every change in the settings panel.
 
@@ -46,7 +46,7 @@ Modules read booleans with `ns.On(key)`, which falls back to the default before 
 
 Adding a setting means: an entry in `ns.DEFAULTS` with its comment, the module reading it, a control in `Settings.lua` (which binds controls to settings by a path string, `"fade"` or `"groups.bars"`, and marks the ones that need a reload), and optionally a word for `/serene` in Core's `SWITCHES` and `ORDER` and, when the word differs from the setting's key, `KEYS`. The `Toggle`, `Choice` and `Slider` calls in `Settings.lua`'s pages show how a control is declared; [shell.md](shell.md) describes the panel.
 
-`SereneDB` also holds data that isn't a setting. A few of these have an empty default in `ns.DEFAULTS` so `Fill` creates them (`inv`, `bagPins`, `bagCats`, `bagKeep`, `hintLast`); the rest are created by their module when first needed:
+`SereneDB` also holds data that isn't a setting. A few of these have an empty default in `ns.DEFAULTS` so `Fill` creates them (`inv`, `bagPins`, `bagCats`, `bagKeep`, `hintLast`); the rest are created by their module when first needed and are listed in `ns.STATE` in `Core.lua`:
 
 | Key | Kept by | What it holds |
 |---|---|---|
@@ -58,9 +58,9 @@ Adding a setting means: an entry in `ns.DEFAULTS` with its comment, the module r
 | `auraShortSpells` | AuraFrame | buffs seen to be short, by spell id |
 | `settingsPage` | Settings | the panel page last open |
 | `namesSaved`, `namesKeyGiven`, `tipCompare`, `tipCompareDone`, `merchantNoted`, `bagsNoted`, `ungrouped`, `topHover` | Names, Tooltip, Vendor, Bags, Core | one-time flags and values to give back |
-| `unitsDump`, `probe*`, `capture`, `capturing` | Units, Auras, ActionBars, Capture | debug dumps and captured test data |
+| `unitsDump`, `probeMouse`, `probeGlow`, `capture`, `capturing` | Units, Auras, ActionBars, Capture | debug dumps and captured test data |
 
-Saved data must never reuse a setting's key: `barUse` is BarUse's on/off switch, so its per-character data lives under `barUseBy`. `tools/test/spec/settings.lua` keeps a list of the known keys and fails on anything a file reads that is neither a setting nor on that list.
+Saved data must never reuse a setting's key: `barUse` is BarUse's on/off switch, so its per-character data lives under `barUseBy`. A key that is neither a setting nor in `ns.STATE` is dropped at every login, so new saved state must be added there. `tools/test/spec/settings.lua` fails on anything a file reads that is neither a setting nor in `ns.STATE`, and on an `ns.STATE` key no file uses.
 
 ## Shared helpers in Core.lua
 
@@ -78,6 +78,8 @@ The rest are for reading the game safely:
 | `ns.Over(frame, ...)` | `IsMouseOver` that can't error and is false for hidden frames |
 | `ns.Approach(cur, target, elapsed, fadeIn, fadeOut)` | One step of a fade toward `target` |
 | `ns.AnchoredTo(frame, other)` | Whether `frame` is anchored to `other`; used so two windows placed side by side never anchor to each other both ways |
+| `ns.IsRegion(v)`, `ns.IsTexture(v)`, `ns.IsFontString(v)` | Whether a value found among a frame's keys is a region, a texture, a text |
+| `ns.Silence(frame)` | Makes one of the game's frames unseen and too small to catch the mouse, again whenever the game resets it (see below) |
 
 `/serene` on its own opens the settings panel, `/serene help` lists the switches, and `/serene debug` calls every module's `*Debug` function. The debug words are listed in [workflow.md](workflow.md).
 
@@ -99,7 +101,7 @@ Serene never calls `Hide()` on the game's regions, because the game calls `Show(
 |---|---|---|
 | Alpha 0, held there by hooks | Regions the game keeps re-showing or re-fading | Units (`PutAway`), MenuBar (`Away`), ActionBars |
 | Reparented to a frame that's never shown | Art with animations, which would restore its alpha | CastBar (`hidden`), Units, Chat and Minimap (`Tuck`), Toasts (`PutAway` into `attic`) |
-| Silenced: alpha 0 and scale 0.01, re-applied from `SetAlpha`/`SetScale` hooks | Frames that must stay shown and keep working but must not catch the mouse | The game's aura containers (AuraFrame, UnitAuras) |
+| Silenced: alpha 0 and scale 0.01, re-applied from `SetAlpha`/`SetScale` hooks | Frames that must stay shown and keep working but must not catch the mouse | The game's aura containers (AuraFrame, UnitAuras), through `ns.Silence` in Core |
 | The whole window reparented into a hidden frame | Bag windows: `IsShown()` still reports true, so the game's open/closed state can drive Serene's | Bags |
 | Alpha 0 and moved off-screen | A window that has to stay really open, with its right-click selling, confirmations and closing | Vendor (MerchantFrame) |
 
@@ -221,7 +223,7 @@ The other exports:
 
 Exports are defined when a file loads, and callers look them up when they need them and check for nil, so load order rarely matters. The exceptions are things created in `init`: `ns.chat`, and the named frames Fade collects (it re-collects them every 3 seconds for that reason).
 
-Some `ns.*` names exist only so the tests can reach a file's locals (`ns.LootRead`, `ns.FadeStep`, `ns.BagsSections`, `ns.MerchantFindJunk`...). They're marked `-- (tests)`. A few have no callers in the addon: `ns.FormatPattern` (ChatLoot's helper behind `FormatMatch`), `ns.NamesHidden`, and in Auras.lua `ScanNewAuras`, `DressNeighbours`, `ns.SnapshotTargetAuras` and `ns.AuraNeighbours`.
+Some `ns.*` names exist only so the tests can reach a file's locals (`ns.LootRead`, `ns.FadeStep`, `ns.BagsSections`, `ns.MerchantFindJunk`...). They're marked `-- (tests)`.
 
 ## Code style
 

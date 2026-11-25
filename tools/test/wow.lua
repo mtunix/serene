@@ -20,6 +20,7 @@ wow.printed = {}       -- every line added to a chat frame
 wow.missing = {}       -- globals looked up that the stub doesn't define: name -> count
 wow.now = 1000         -- GetTime()
 wow.combat = false     -- InCombatLockdown() and UnitAffectingCombat("player")
+local regenDisabling = false -- (wow.fight: in the fight, but not locked down yet)
 wow.money = 123456
 wow.cvars = { showSwingTimer = "1", countdownForCooldowns = "1", showTimestamps = "none", nameplateShowAll = "1" }
 wow.player = { name = "Tester", realm = "Testrealm", class = "Warrior", classFile = "WARRIOR", classID = 1, level = 60,
@@ -246,7 +247,7 @@ function Widget:GetRegions() return unpack(S(self).regions) end
 function Widget:GetNumRegions() return #S(self).regions end
 function Widget:IsForbidden() return false end
 function Widget:IsProtected() return S(self).protected or false, S(self).protected or false end
-function Widget:CanChangeProtectedState() return not wow.combat end
+function Widget:CanChangeProtectedState() return not InCombatLockdown() end
 
 -- shown / alpha / scale
 -- (OnShow and OnHide on this widget only: unlike the game, its children hear nothing when it changes)
@@ -794,7 +795,7 @@ function IsAltKeyDown() return wow.alt or false end
 function IsModifiedClick() return false end
 function IsModifierKeyDown() return wow.shift or wow.ctrl or wow.alt or false end
 function IsLoggedIn() return wow.loggedIn or false end
-function InCombatLockdown() return wow.combat end
+function InCombatLockdown() return wow.combat and not regenDisabling end
 function ReloadUI() wow.reloaded = true end
 
 -- Pass the mouse over a frame: its OnEnter (and OnLeave from the one before).
@@ -805,9 +806,12 @@ function wow.hover(frame)
 end
 
 -- The combat state, with the events that say so.
+-- (PLAYER_REGEN_DISABLED comes just before the lockdown: the last moment secure frames can still be hidden)
 function wow.fight(on)
 	wow.combat = on and true or false
+	regenDisabling = wow.combat
 	wow.fire(on and "PLAYER_REGEN_DISABLED" or "PLAYER_REGEN_ENABLED")
+	regenDisabling = false
 end
 
 -- hooksecurefunc: the hook runs after the function (on a table, or a global by name).

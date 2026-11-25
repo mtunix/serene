@@ -208,8 +208,7 @@ test("/serene debug and its special words", function()
 	World()
 	wow.login(nil)
 	wow.advance(1)
-	for _, word in ipairs({ "", " menu", " auraholder", " plates", " targeticons", " mouse", " targetauras", " auras",
-		" glow", " units", " units PlayerFrame" }) do
+	for _, word in ipairs({ "", " menu", " mouse", " auras", " glow", " units", " units PlayerFrame" }) do
 		wow.slash("/serene debug" .. word)
 	end
 	clean()

@@ -37,7 +37,7 @@ local function FormatPattern(format)
 	pattern = pattern:gsub("\1", "(%%d+)"):gsub("\2", "(.+)")
 	return "^" .. pattern .. "$", order
 end
-ns.FormatPattern = FormatPattern
+ns.FormatPattern = FormatPattern -- (tests)
 
 -- The captures of a match, in the format's own argument order.
 local function Match(text, format)
@@ -251,7 +251,6 @@ local function RollText(roll)
 end
 
 -- The state, once per sentence (every window hears it); then each window's own line.
-local lastLine
 local function UpdateRoll(said, lineID)
 	local roll
 	if said.kind == "choice" then

@@ -276,7 +276,7 @@ local function Realm()
 end
 
 local function Mine()
-	local realm, name = Me()
+	local _, name = Me()
 	local characters = Realm()
 	local me = characters[name] or {}
 	characters[name] = me

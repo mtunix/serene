@@ -18,6 +18,8 @@ python3 tools/check.py --list      # each file's globals, to read through
 
 `check.py` parses every file and walks it with Lua's scoping rules, so it knows which names are locals at each point. It reports parse errors, any global a file reads that isn't listed in `tools/globals.txt` (usually a typo), a local read above the line that declares it or outside the block it was declared in (it would be nil there), and any assignment that creates a global by accident, which almost always means a missing `local`. Only the names under `# Serene writes` in `globals.txt` may be assigned.
 
+It also reports what is left over: a local function no one calls, a local no one reads (a parameter or loop variable may go unread; a local meant to be unread is named `_`), and, on a run over every file, an `ns.X` that is set but read nowhere, neither in the addon nor anywhere under `tools/test`. An export that exists only for the tests is read by a spec, so it counts as used.
+
 When a file starts using a game API on purpose, add the name to `globals.txt` in its section, after making sure it exists on this client ([forever-client.md](forever-client.md) describes how). Names looked up by string, `_G["X"]` or `rawget(_G, "X")`, don't need to be listed.
 
 ## The tests
@@ -31,7 +33,7 @@ python3 tools/test/run.py -v          # also list the globals the addon read tha
 
 The runner uses `lupa` to run the addon under Lua 5.1, the version the game uses. Each test gets a fresh Lua state with a fresh copy of the stub and the addon, so tests can't affect each other; a spec's top-level code (loading the addon, filling in items) runs again before every test.
 
-`tools/test/wow.lua` is the stub. Its frames keep their state (size, points, shown, alpha, text, scripts) and report it back, but nothing is drawn and the layout is crude. Around the frames it provides events (`wow.fire`), time and timers (`wow.advance`), the mouse (`wow.hover`), bags, items, spells, auras and the merchant as plain tables a test fills in (`wow.bags`, `wow.items`...), chat filters with `wow.say`, and slash commands with `wow.slash`. `wow.load()` loads the addon's files in TOC order into one namespace and `wow.login(saved)` runs `ADDON_LOADED` and `PLAYER_LOGIN`. A global the stub doesn't define reads as nil, as it would on a client without it.
+`tools/test/wow.lua` is the stub. Its frames keep their state (size, points, shown, alpha, text, scripts) and report it back, but nothing is drawn and the layout is crude. Around the frames it provides events (`wow.fire`), a fight (`wow.fight`, whose `PLAYER_REGEN_DISABLED` comes just before the lockdown, as in game), time and timers (`wow.advance`), the mouse (`wow.hover`), bags, items, spells, auras and the merchant as plain tables a test fills in (`wow.bags`, `wow.items`...), chat filters with `wow.say`, and slash commands with `wow.slash`. `wow.load()` loads the addon's files in TOC order into one namespace and `wow.login(saved)` runs `ADDON_LOADED` and `PLAYER_LOGIN`. A global the stub doesn't define reads as nil, as it would on a client without it.
 
 Secret values are imitated too. `wow.secret(v)` makes one: arithmetic, ordering comparisons, indexing, calling and `#` on it raise an error, concatenating gives another secret, `type()` reports the hidden type and `issecretvalue()` is true. `wow.secretFight(true)` starts a fight in which the calls the client hides behave as they do in game: the player's aura queries return nothing, other units' auras, health, power and cast info come back secret, and so do cooldowns, usability and range. What the stub can't imitate is an error on `==` or on a truth test (`if secret then`), because plain Lua won't allow it; those mistakes still only show in game.
 
@@ -43,9 +45,10 @@ The specs:
 |---|---|
 | `smoke.lua` | The whole addon: login, every module's refresh, every switch and setting, a fight, the debug commands, the mouse over every Serene frame, a long list of game events |
 | `secrets.lua` | Fights with secret values, in several looks and settings |
-| `settings.lua` | Settings agree across files: what files read is declared, every default is used, no setting doubles as saved state, the panel and `/serene` touch real settings, the migrations |
+| `settings.lua` | Settings agree across files: what files read is declared, every default and every `ns.STATE` key is used, no setting doubles as saved state, the panel and `/serene` touch real settings, the migrations and the dropping of old keys |
 | `chat*.lua`, `items.lua`, `bags.lua`, `vendor.lua`, `tooltip.lua` | The logic of chat and loot lines, item sections, the bags, the merchant and the tooltips |
 | `actions*.lua`, `bars_*.lua`, `fade.lua`, `modes.lua`, `hints.lua` | The action button model, the bar modules, fading, rest mode, hints |
+| `swing.lua`, `aura_frame.lua` | The swing timer's lines through swings and speed changes; Serene's buff frame: its groups and filters, short buffs learned, the missing buffs' place beside the top row |
 | `client_rules.lua` | Rules of this client checked in the source, such as no `"TRILINEAR"` texture filter |
 | `captured.lua` | Chat lines and tooltips recorded from the real client (below), and `Capture.lua` itself |
 
@@ -107,10 +110,6 @@ Some words after `debug` produce larger dumps:
 |---|---|
 | `/serene debug units [frame]` | every region and child of a unit frame (size, position, alpha, art, anchor), saved to `SereneDB.unitsDump` |
 | `/serene debug auras` | the same as AuraFrame's debug line |
-| `/serene debug targetauras` | a walk of TargetFrame's auras, saved to `SereneDB.probeTargetAuras` |
-| `/serene debug auraholder` | the game's aura holders, their methods and the AuraContainer enums, saved to `probeHolder` |
-| `/serene debug plates` | which cooldown calls reached nameplate swirls, saved to `probePlates` |
-| `/serene debug targeticons` | visible icon textures under TargetFrame |
 | `/serene debug mouse` | the frames under the mouse with their parents, saved to `probeMouse` |
 | `/serene debug menu` | MenuBar's line only |
 | `/serene debug glow` | the shown parts of the action button under the mouse, naming any glow Serene doesn't know, saved to `probeGlow` |

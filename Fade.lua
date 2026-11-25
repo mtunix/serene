@@ -556,4 +556,3 @@ end
 
 table.insert(ns.modules, { init = Init, refresh = function() if state.bars then Step(0) end end })
 ns.FadeStep = Step -- (tests)
-ns.FadeCollect = Collect

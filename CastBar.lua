@@ -45,17 +45,7 @@ local holding = false  -- (Serene's own calls, not heard by its hooks)
 local hidden           -- (where the art goes: a frame never shown, so the game's animations on it show nothing)
 local active = false
 
-local function IsRegion(value)
-	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
-end
-
-local function IsTexture(region)
-	return IsRegion(region) and Safe(region.IsObjectType, region, "Texture") == true
-end
-
-local function IsFontString(region)
-	return IsRegion(region) and Safe(region.IsObjectType, region, "FontString") == true
-end
+local IsRegion, IsTexture, IsFontString = ns.IsRegion, ns.IsTexture, ns.IsFontString
 
 local function Place(region, ...)
 	holding = true

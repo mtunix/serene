@@ -1,5 +1,4 @@
 local _, ns = ...
-local Safe = ns.Safe
 
 -- The quest tracker hidden: the game's own and Questie's, hidden again each time they show. In a fight the game
 -- may refuse to hide the game's tracker (its quest item buttons are protected): it is only made invisible then,

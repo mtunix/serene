@@ -40,13 +40,7 @@ local seen = {}      -- toast -> how it was drawn when last up (/serene debug)
 local placing = false -- (Serene's own SetPoint on the anchor, not heard by its hook)
 local mover          -- the sample toast /serene toasts move shows
 
-local function IsTexture(region)
-	return type(region) == "table" and region.IsObjectType and Safe(region.IsObjectType, region, "Texture") == true
-end
-
-local function IsText(region)
-	return type(region) == "table" and region.IsObjectType and Safe(region.IsObjectType, region, "FontString") == true
-end
+local IsTexture, IsText = ns.IsTexture, ns.IsFontString
 
 -- The game's toast and its parts -----------------------------------------------------------------------------------
 

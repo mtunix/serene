@@ -1090,4 +1090,4 @@ table.insert(ns.modules, { init = Init, refresh = Refresh })
 
 ns.TooltipState = state -- (tests)
 ns.TooltipHushed = Hushed -- (tests)
-ns.TooltipOnData, ns.TooltipCuts, ns.TooltipPass = OnData, cuts, Pass -- (tests)
+ns.TooltipCuts = cuts -- (tests)

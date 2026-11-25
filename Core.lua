@@ -203,6 +203,28 @@ ns.DEFAULTS = {
 	repairGuild = false,   -- with the guild's money first, when it allows
 }
 
+-- Saved, but not settings: what the files keep in SereneDB themselves (so no default). Anything saved that is neither
+-- this nor a setting is let go at login (a setting or a dump no file reads any more), so a new one goes here, on
+-- purpose; spec/settings.lua fails on a read that is neither.
+ns.STATE = {
+	ungrouped = true, topHover = true,                 -- migration flags (Core.lua)
+	toastAt = true,                                   -- where the toasts appear (Toasts.lua)
+	auraAt = true, auraDebuffFree = true, auraShortSpells = true, -- AuraFrame.lua
+	topPos = true, gold = true,                       -- TopBar.lua (gold: money per character)
+	settingsPage = true,                              -- the settings panel's page last open
+	supplies = true,                                  -- BarSupplies.lua
+	ranks = true,                                     -- Ranks.lua
+	keyLearn = true,                                  -- BarKeys.lua
+	barUseBy = true,                                  -- BarUse.lua, per character
+	barSetsBy = true,                                 -- BarSets.lua, per character
+	namesSaved = true, namesKeyGiven = true,          -- Names.lua
+	tipCompare = true, tipCompareDone = true,         -- Tooltip.lua
+	merchantNoted = true, bagsNoted = true,           -- one-time notes said
+	bankPos = true, bagsPos = true,                   -- Bags.lua windows placed by hand
+	unitsDump = true, probeMouse = true, probeGlow = true, -- debug dumps (Units, Auras, ActionBars)
+	capture = true, capturing = true,                 -- Capture.lua
+}
+
 -- Serene's colours, one palette for every file -------------------------------------------------------------------
 
 ns.MUTED = "|cff8f8f8f"         -- what is said quietly (a time, a hint, a detail)
@@ -274,6 +296,38 @@ function ns.Clean(value)
 	return value
 end
 
+-- One of the game's regions (a texture, a text...), and of which kind: for parts found by searching a frame's keys.
+function ns.IsRegion(value)
+	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
+end
+
+function ns.IsTexture(region)
+	return ns.IsRegion(region) and ns.Safe(region.IsObjectType, region, "Texture") == true
+end
+
+function ns.IsFontString(region)
+	return ns.IsRegion(region) and ns.Safe(region.IsObjectType, region, "FontString") == true
+end
+
+-- A frame of the game's made unseen, and too small to catch the mouse, again whenever the game sets it back: for one
+-- that must stay shown and keep working (the game's aura containers, which Edit Mode places and the game fills).
+local silenced = {}
+function ns.Silence(frame)
+	if silenced[frame] then return end
+	silenced[frame] = true
+	local holding = false
+	local function Again()
+		if holding then return end
+		holding = true
+		pcall(frame.SetAlpha, frame, 0)
+		pcall(frame.SetScale, frame, 0.01)
+		holding = false
+	end
+	Again()
+	hooksecurefunc(frame, "SetAlpha", Again)
+	hooksecurefunc(frame, "SetScale", Again)
+end
+
 -- The mouse over a frame (extended by top, bottom, left, right like the game's own method).
 function ns.Over(frame, top, bottom, left, right)
 	if type(frame) ~= "table" or not frame.IsMouseOver then return false end
@@ -333,6 +387,10 @@ loader:SetScript("OnEvent", function(self, event, name)
 	if event == "ADDON_LOADED" then
 		if name ~= ADDON then return end
 		SereneDB = type(SereneDB) == "table" and SereneDB or {}
+		-- (what no file reads any more only takes room)
+		for key in pairs(SereneDB) do
+			if ns.DEFAULTS[key] == nil and not ns.STATE[key] then SereneDB[key] = nil end
+		end
 		Fill(SereneDB, ns.DEFAULTS)
 		-- ("glow" isn't one of hintReveal's choices: the nearest is "none")
 		if SereneDB.hintReveal == "glow" then SereneDB.hintReveal = "none" end
@@ -477,16 +535,8 @@ SlashCmdList.SERENE = function(msg)
 		ns.Print(("a faded part stays at %d%%"):format(ns.db.rest))
 	elseif a == "debug" and b == "menu" and ns.MenuDebug then
 		return ns.MenuDebug()
-	elseif a == "debug" and b == "auraholder" and ns.AuraHolderDump then
-		return ns.AuraHolderDump()
-	elseif a == "debug" and b == "plates" and ns.AuraPlatesDump then
-		return ns.AuraPlatesDump()
-	elseif a == "debug" and b == "targeticons" and ns.AuraTargetIcons then
-		return ns.AuraTargetIcons()
 	elseif a == "debug" and b == "mouse" and ns.AuraMouseDump then
 		return ns.AuraMouseDump()
-	elseif a == "debug" and b == "targetauras" and ns.AuraTargetDump then
-		return ns.AuraTargetDump()
 	elseif a == "debug" and b == "auras" and ns.AuraProbe then
 		return ns.AuraProbe()
 	elseif a == "sets" then

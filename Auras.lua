@@ -37,7 +37,6 @@ local DIM = 0.55                   -- how dark the icon's elapsed part turns
 -- came, to be played again on Serene's own swirl the same way. A few values per swirl, let go with it.
 local TIMING = {}       -- the swirls' timing calls on this game (names)
 local lastTiming = setmetatable({}, { __mode = "k" }) -- swirl -> { [name] = { name, n = .., args... }, order = {...} }
-local seenCalls = setmetatable({}, { __mode = "k" })  -- swirl -> name -> times called (for /serene debug plates)
 local function IsTimingCall(name)
 	if type(name) ~= "string" or not name:find("^Set") or name:find("Countdown") or name:find("Swipe")
 		or name:find("Edge") or name:find("Bling") or name:find("Point") then
@@ -64,21 +63,11 @@ do
 				end
 				if not kept[name] then kept.order[#kept.order + 1] = name end
 				kept[name] = { name, n = select("#", ...) + 1, ... } -- (n: nil arguments kept, # would drop them)
-				local seen = seenCalls[self] or {}
-				seenCalls[self] = seen
-				seen[name] = (seen[name] or 0) + 1
 			end)
 		end
-		for _, name in ipairs({ "Clear", "Pause", "Resume" }) do
-			if type(methods[name]) == "function" then
-				hooksecurefunc(methods, name, function(self)
-					-- (a cleared swirl's timing forgotten, so Replay can't bring it back)
-					if name == "Clear" then lastTiming[self] = nil end
-					local seen = seenCalls[self] or {}
-					seenCalls[self] = seen
-					seen[name] = (seen[name] or 0) + 1
-				end)
-			end
+		if type(methods.Clear) == "function" then
+			-- (a cleared swirl's timing forgotten, so Replay can't bring it back)
+			hooksecurefunc(methods, "Clear", function(self) lastTiming[self] = nil end)
 		end
 	end
 end
@@ -148,17 +137,7 @@ local pending = false -- (a scan already asked for on the next frame)
 local active, onUnits, onPlayer, onPlates = false, false, true, false
 local hookedObjects = {} -- (hooks can't be removed: each object hooked once)
 
-local function IsRegion(value)
-	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
-end
-
-local function IsTexture(region)
-	return IsRegion(region) and Safe(region.IsObjectType, region, "Texture") == true
-end
-
-local function IsFontString(region)
-	return IsRegion(region) and Safe(region.IsObjectType, region, "FontString") == true
-end
+local IsRegion, IsTexture, IsFontString = ns.IsRegion, ns.IsTexture, ns.IsFontString
 
 -- A part of a button, by its key or the older global name.
 -- (rawget: some of the game's frames have an __index metatable)
@@ -862,39 +841,6 @@ local function ScanPlayer()
 	Globals(PLAYER_GLOBALS, "player")
 end
 
--- The newer game's unit auras may hang outside the unit frame, only placed over it: found by where they are. Small
--- square frames over or beside a unit frame (in screen units), with a cooldown swirl (an aura's; no other small
--- thing there has one). Looked for at most every two seconds: it goes through every frame there is.
-local function Rect(frame)
-	local scale = Clean(Safe(frame.GetEffectiveScale, frame))
-	local left, right = Clean(Safe(frame.GetLeft, frame)), Clean(Safe(frame.GetRight, frame))
-	local top, bottom = Clean(Safe(frame.GetTop, frame)), Clean(Safe(frame.GetBottom, frame))
-	if not (type(scale) == "number" and type(left) == "number" and type(right) == "number" and type(top) == "number"
-		and type(bottom) == "number") then return nil end
-	return left * scale, right * scale, top * scale, bottom * scale
-end
-
-local function Neighbours(around, pad)
-	local al, ar, at, ab = Rect(around)
-	if not al then return {} end
-	local found = {}
-	local f = EnumerateFrames and EnumerateFrames()
-	while f do
-		if not dressed[f] and Clean(Safe(f.IsVisible, f)) and rawget(f, "action") == nil then
-			local l, r, t, b = Rect(f)
-			if l then
-				local w, h = r - l, t - b
-				if w >= 8 and h >= 8 and w <= 60 and h <= 60 and math.abs(w - h) <= math.max(w, h) * 0.25
-					and l >= al - pad and r <= ar + pad and b >= ab - pad * 2 and t <= at + pad * 2 then
-					found[#found + 1] = f
-				end
-			end
-		end
-		f = EnumerateFrames(f)
-	end
-	return found
-end
-
 -- Nameplates' auras (the newer game shows your debuffs on an enemy there, not on its unit frame): each a frame with
 -- an Icon, a Cooldown and a CountFrame, in the plate's AurasFrame lists. Dressed like the others; the square border
 -- art the game lays over them (a texture of no name) put away.
@@ -932,17 +878,6 @@ local function ScanPlates()
 	end
 end
 
--- The newer game's aura icons (the target's and focus's, as on the nameplates): one build, wherever they hang: an Icon,
--- a Cooldown, a CountFrame and a "useAuraDisplayTime" of their own. Found once by going through every frame (costly:
--- at most every few seconds, and only until some are known); after that, only their parents are looked in, for new
--- ones from the same pool.
-local function IsNewAura(f)
-	return type(f) == "table" and rawget(f, "useAuraDisplayTime") ~= nil and IsTexture(rawget(f, "Icon"))
-		and rawget(f, "Cooldown") ~= nil
-end
-
-local auraParents = {} -- frame -> true: holds such auras
-
 -- An aura's look, whatever its build: a square picture with a swirl or a count, no portrait, not a bar.
 local function LooksLikeAura(f)
 	if type(f) ~= "table" or dressed[f] or HasPortrait(f) or Safe(f.IsObjectType, f, "StatusBar") == true then
@@ -950,49 +885,6 @@ local function LooksLikeAura(f)
 	end
 	return (IconOf(f) or LooseIcon(f)) ~= nil and (CooldownOf(f) or CountOf(f) or rawget(f, "CountFrame")) ~= nil
 end
-local nextSweep, sweeps = 0, 0
-local function DressNewAura(f)
-	if dressed[f] then return end
-	pcall(PlateExtras, f)
-	pcall(Dress, f, "unit", true)
-	local parent = Safe(f.GetParent, f)
-	if parent then auraParents[parent] = true end
-end
-
-local function ScanNewAuras()
-	for parent in pairs(auraParents) do
-		for _, child in ipairs({ Safe(parent.GetChildren, parent) }) do
-			if IsNewAura(child) or LooksLikeAura(child) then DressNewAura(child) end
-		end
-	end
-	-- (every frame gone through: when none are known yet, or now and then for other pools)
-	local now = GetTime()
-	if now < nextSweep then return end
-	nextSweep = now + (next(auraParents) and 30 or 3)
-	sweeps = sweeps + 1
-	local f = EnumerateFrames and EnumerateFrames()
-	while f do
-		if IsNewAura(f) then DressNewAura(f) end
-		f = EnumerateFrames(f)
-	end
-end
-
-local nextNeighbours = 0
-local function DressNeighbours()
-	if GetTime() < nextNeighbours then return end
-	nextNeighbours = GetTime() + 2
-	for _, name in ipairs(UNIT_FRAMES) do
-		local frame = _G[name]
-		if type(frame) == "table" and Clean(Safe(frame.IsVisible, frame)) then
-			for _, f in ipairs(Neighbours(frame, 40)) do
-				if CooldownOf(f) and Safe(f.IsObjectType, f, "StatusBar") ~= true and not HasPortrait(f) then
-					pcall(Dress, f, "unit", true)
-				end
-			end
-		end
-	end
-end
-ns.AuraNeighbours = Neighbours
 
 local function ScanUnits()
 	for _, name in ipairs(UNIT_FRAMES) do
@@ -1194,305 +1086,9 @@ local function Describe(f)
 		#regions > 0 and table.concat(regions, ", ") or "none", #children > 0 and table.concat(children, ", ") or "none")
 end
 
--- What the target's frame holds for its auras, as lines: each aura holder and everything in it, three levels down.
--- Kept in SereneDB.probeTargetAuras too (read from the saved file: the game writes it on /reload or logout).
-local function Snapshot()
-	local frame = _G.TargetFrame
-	local out = {}
-	if type(frame) ~= "table" then return { "no target frame" } end
-	out[#out + 1] = ("target: %s, %s"):format(tostring(Clean(Safe(UnitName, "target"))),
-		tostring(Clean(Safe(GetTime))))
-	-- (where the target's auras really are: any visible texture showing one of their icons, wherever its frame is)
-	local icons, list = {}, {}
-	local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
-	for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
-		for index = 1, 8 do
-			local data = get and Safe(get, "target", index, filter)
-			if data == nil then break end
-			local icon = Clean(data.icon)
-			if icon ~= nil then icons[icon] = true list[#list + 1] = tostring(icon) end
-		end
-	end
-	out[#out + 1] = "target's icons: " .. table.concat(list, ", ")
-	local function Ours(f)
-		local depth = 0
-		while f and depth < 30 do
-			local name = Clean(Safe(f.GetName, f))
-			if name == "SereneAuras" or name == "SereneDebuffs" or name == "SereneAuraCard" or name == "BuffFrame"
-				or name == "DebuffFrame" then return true end
-			f = Safe(f.GetParent, f)
-			depth = depth + 1
-		end
-	end
-	local function Path(f)
-		local parts, depth = {}, 0
-		while f and depth < 12 do
-			local name = Clean(Safe(f.GetName, f))
-			local parent = Safe(f.GetParent, f)
-			if not name and parent then
-				for key, value in pairs(parent) do
-					if value == f and type(key) == "string" then name = "." .. key break end
-				end
-			end
-			if type(name) ~= "string" or ns.IsSecret(name) then name = nil end
-			table.insert(parts, 1, name or "?")
-			local ok, first = pcall(string.sub, name or "", 1, 1)
-			if name and ok and first ~= "." then break end
-			f = parent
-			depth = depth + 1
-		end
-		return table.concat(parts, "/")
-	end
-	local wanted = {}
-	for icon in pairs(icons) do wanted[tostring(icon)] = true end
-	local matches, frames, secret = 0, 0, 0
-	local f = EnumerateFrames and EnumerateFrames()
-	while f do
-		frames = frames + 1
-		if matches < 8 and not Ours(f) and rawget(f, "action") == nil then
-			for _, region in ipairs({ Safe(f.GetRegions, f) }) do
-				if IsTexture(region) then
-					local raw = Safe(region.GetTexture, region)
-					if ns.IsSecret(raw) then
-						secret = secret + 1
-						if secret <= 6 then
-							local parent = Safe(f.GetParent, f)
-							out[#out + 1] = ("secret picture at %s (%s, %s)"):format(Path(f),
-								Clean(Safe(region.IsVisible, region)) and "visible" or "not visible",
-								dressed[f] and "dressed" or "not dressed")
-							out[#out + 1] = "  it: " .. Describe(f)
-							if parent then out[#out + 1] = "  its parent: " .. Describe(parent) end
-						end
-					end
-					local texture = Clean(raw)
-					if texture ~= nil and wanted[tostring(texture)] then
-						matches = matches + 1
-						local parent = Safe(f.GetParent, f)
-						out[#out + 1] = ("found %s at %s (%s)"):format(tostring(texture), Path(f),
-							Clean(Safe(region.IsVisible, region)) and "visible" or "not visible")
-						out[#out + 1] = "  it: " .. Describe(f)
-						if parent then out[#out + 1] = "  its parent: " .. Describe(parent) end
-						break
-					end
-				end
-			end
-		end
-		f = EnumerateFrames(f)
-	end
-	out[#out + 1] = ("%d frame(s) showing the target's icons, of %d frames; %d textures secret"):format(matches,
-		frames, secret)
-	local near = Neighbours(frame, 40)
-	out[#out + 1] = ("%d small square frame(s) over or beside the target's frame"):format(#near)
-	for index, f in ipairs(near) do
-		if index > 10 then break end
-		local okPath, path = pcall(Path, f)
-		local okIt, it = pcall(Describe, f)
-		out[#out + 1] = ("near: %s%s%s"):format(okPath and path or "?", dressed[f] and " (dressed)" or "",
-			CooldownOf(f) and " (swirl)" or "")
-		out[#out + 1] = "  it: " .. (okIt and it or "?")
-	end
-	local holders = ns.AuraContainers(frame)
-	out[#out + 1] = ("%d aura holder(s)"):format(#holders)
-	for h, holder in ipairs(holders) do
-		out[#out + 1] = ("holder %d (%s): %s"):format(h, Clean(Safe(holder.GetName, holder)) or "?", Describe(holder))
-		local shown = 0
-		local function Inside(f, path, depth)
-			for index, child in ipairs({ Safe(f.GetChildren, f) }) do
-				if shown >= 30 then return end
-				shown = shown + 1
-				out[#out + 1] = ("%s/#%d%s%s%s: %s"):format(path, index, dressed[child] and " (dressed)" or "",
-					IsLooseAura(child) and " (aura)" or "", Clean(Safe(child.IsShown, child)) and "" or " (hidden)",
-					Describe(child))
-				if depth < 3 then Inside(child, path .. "/#" .. index, depth + 1) end
-			end
-		end
-		Inside(holder, "  " .. h, 0)
-	end
-	return out
-end
-
-local snapped, waiting = 0, false
-local function SnapshotOnce()
-	if snapped >= 3 or waiting or not ns.db then return end
-	-- (only with a target wearing something, and out of a fight, where it can be read)
-	local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
-	if not get or not Clean(Safe(UnitExists, "target")) or Clean(Safe(UnitIsUnit, "target", "player")) then return end
-	if Safe(get, "target", 1, "HELPFUL") == nil and Safe(get, "target", 1, "HARMFUL") == nil then return end
-	-- (a moment later: the game draws a new target's auras after Serene first looks)
-	waiting = true
-	C_Timer.After(1.5, function()
-		waiting = false
-		if not Clean(Safe(UnitExists, "target")) or Clean(Safe(UnitIsUnit, "target", "player")) then return end
-		snapped = snapped + 1
-		local ok, lines = pcall(Snapshot)
-		lines = ok and lines or { "failed: " .. tostring(lines) }
-		ns.db.probeTargetAuras = lines
-	end)
-end
-
--- /serene debug targetauras (with a target that has auras): the frames under the target's frame holding an icon,
--- with their keys, and whether they were taken for aura buttons; then what its "Auras" holds, piece by piece.
-function ns.AuraTargetDump()
-	local frame = _G.TargetFrame
-	if type(frame) ~= "table" then return ns.Print("no target frame") end
-	local lines = 0
-	local function Visit(f, path, depth)
-		if depth > 6 or lines >= 25 then return end
-		local keys, icon = {}, false
-		for key, value in pairs(f) do
-			if type(key) == "string" and IsRegion(value) then
-				keys[#keys + 1] = key .. ":" .. (Clean(Safe(value.GetObjectType, value)) or "?")
-				if key:find("Icon", 1, true) and IsTexture(value) then icon = true end
-			end
-		end
-		local hasCooldown = CooldownOf(f) ~= nil
-		if icon or hasCooldown then
-			lines = lines + 1
-			table.sort(keys)
-			ns.Print(("%s%s%s: %s"):format(path, dressed[f] and " (dressed)" or "", IsAuraButton(f) and " (aura)" or "",
-				table.concat(keys, " ")))
-		end
-		for index, child in ipairs({ Safe(f.GetChildren, f) }) do
-			local name = Clean(Safe(child.GetName, child))
-			Visit(child, path .. "/" .. (name or ("#" .. index)), depth + 1)
-		end
-	end
-	Visit(frame, "TargetFrame", 0)
-	if lines == 0 then ns.Print("nothing with an icon or a swirl under the target's frame") end
-	local lines = Snapshot()
-	ns.db.probeTargetAuras = lines
-	for index = 1, math.min(#lines, 12) do ns.Print(lines[index]) end
-	ns.Print("(all of it saved for Serene's author: /reload writes it)")
-end
-
-ns.SnapshotTargetAuras = SnapshotOnce
-
--- /serene debug auraholder: the target frame's aura holder (where the game draws the target's auras itself): its
--- type, the methods it has beyond a plain frame's, and what the game offers around it (AuraContainerUtil, the aura
--- enums). Kept in SereneDB.probeHolder.
-local function Methods(object)
-	local names = {}
-	local meta = getmetatable(object)
-	local index = type(meta) == "table" and meta.__index
-	if type(index) == "table" then
-		for key, value in pairs(index) do
-			if type(key) == "string" and type(value) == "function" then names[key] = true end
-		end
-	end
-	return names
-end
-
-function ns.AuraHolderDump()
-	local out = {}
-	local plain = Methods(CreateFrame("Frame"))
-	local holders = ns.AuraContainers(_G.TargetFrame)
-	out[#out + 1] = ("%d holder(s) on the target frame"):format(#holders)
-	for h, holder in ipairs(holders) do
-		out[#out + 1] = ("holder %d: type %s, shown %s, %d children, %d regions, size %s x %s"):format(h,
-			tostring(Clean(Safe(holder.GetObjectType, holder))), tostring(Clean(Safe(holder.IsShown, holder))),
-			select("#", Safe(holder.GetChildren, holder)), select("#", Safe(holder.GetRegions, holder)),
-			tostring(Clean(Safe(holder.GetWidth, holder))), tostring(Clean(Safe(holder.GetHeight, holder))))
-		local extra = {}
-		for name in pairs(Methods(holder)) do
-			if not plain[name] then extra[#extra + 1] = name end
-		end
-		table.sort(extra)
-		out[#out + 1] = "  its own methods: " .. (#extra > 0 and table.concat(extra, " ") or "none")
-		local keys = {}
-		for key, value in pairs(holder) do
-			if type(key) == "string" then keys[#keys + 1] = key .. ":" .. type(value) end
-		end
-		table.sort(keys)
-		out[#out + 1] = "  its keys: " .. table.concat(keys, " ")
-	end
-	local util = _G.AuraContainerUtil
-	if type(util) == "table" then
-		local names = {}
-		for key in pairs(util) do names[#names + 1] = tostring(key) end
-		table.sort(names)
-		out[#out + 1] = "AuraContainerUtil: " .. table.concat(names, " ")
-	else
-		out[#out + 1] = "AuraContainerUtil: " .. type(util)
-	end
-	if type(Enum) == "table" then
-		for name, values in pairs(Enum) do
-			if type(name) == "string" and (name:find("Aura") or name:find("Dispel")) and type(values) == "table" then
-				local parts = {}
-				for key, value in pairs(values) do parts[#parts + 1] = tostring(key) .. "=" .. tostring(value) end
-				table.sort(parts)
-				out[#out + 1] = ("Enum.%s: %s"):format(name, table.concat(parts, " "))
-			end
-		end
-	end
-	if ns.db then ns.db.probeHolder = out end
-	for index = 1, math.min(#out, 4) do ns.Print(out[index]) end
-	ns.Print("(all of it saved for Serene's author: /reload writes it)")
-end
-
--- /serene debug plates: each nameplate aura icon, whether Serene dressed it, which of the game's timing calls reached its
--- swirl (and how often), and whether Serene's darkening swirl took them (kept in SereneDB.probePlates too).
-function ns.AuraPlatesDump()
-	local out = { "timing calls on swirls here: " .. table.concat(TIMING, " ") }
-	local plates = C_NamePlate and C_NamePlate.GetNamePlates and Safe(C_NamePlate.GetNamePlates)
-	local icons = 0
-	for _, plate in ipairs(type(plates) == "table" and plates or {}) do
-		local unitFrame = type(plate) == "table" and rawget(plate, "UnitFrame")
-		local auras = type(unitFrame) == "table" and rawget(unitFrame, "AurasFrame")
-		if type(auras) == "table" and auras.GetChildren then
-			for _, list in ipairs({ Safe(auras.GetChildren, auras) }) do
-				for _, button in ipairs({ Safe(list.GetChildren, list) }) do
-					if Clean(Safe(button.IsShown, button)) then
-						icons = icons + 1
-						local a = dressed[button]
-						local cooldown = (a and a.cooldown) or CooldownOf(button)
-						local calls = {}
-						for name, times in pairs(cooldown and seenCalls[cooldown] or {}) do
-							calls[#calls + 1] = name .. " x" .. times
-						end
-						table.sort(calls)
-						local kept = cooldown and lastTiming[cooldown]
-						out[#out + 1] = ("icon %d: %s; swirl %s, shown %s; calls: %s; kept: %s; darkening %s"):format(icons,
-							a and "dressed" or "not dressed", cooldown and "found" or "none",
-							tostring(cooldown and Clean(Safe(cooldown.IsShown, cooldown))),
-							#calls > 0 and table.concat(calls, ", ") or "none",
-							kept and table.concat(kept.order, " ") or "nothing",
-							a and a.dim and tostring(Clean(Safe(a.dim.GetDrawSwipe, a.dim))) or "-")
-					end
-				end
-			end
-		end
-	end
-	if icons == 0 then out[#out + 1] = "no aura icons on any nameplate now" end
-	for _, line in ipairs(out) do ns.Print(line) end
-	if ns.db then ns.db.probePlates = out end
-end
-
--- /serene debug targeticons: the target frame's pictures keyed as icons that are showing now: which, its art, its size.
-function ns.AuraTargetIcons()
-	local frame = _G.TargetFrame
-	if type(frame) ~= "table" then return ns.Print("no target frame") end
-	local shown = 0
-	local function Visit(f, depth)
-		if depth > 6 then return end
-		for key, value in pairs(f) do
-			if type(key) == "string" and key:find("Icon", 1, true) and IsTexture(value)
-				and Clean(Safe(value.IsVisible, value)) then
-				shown = shown + 1
-				local art = Clean(Safe(value.GetAtlas, value)) or Clean(Safe(value.GetTexture, value))
-				local width, height = Clean(Safe(value.GetWidth, value)), Clean(Safe(value.GetHeight, value))
-				ns.Print(("%s: %s, %sx%s"):format(key, tostring(art), tostring(width and math.floor(width + 0.5)),
-					tostring(height and math.floor(height + 0.5))))
-			end
-		end
-		for _, child in ipairs({ Safe(f.GetChildren, f) }) do Visit(child, depth + 1) end
-	end
-	Visit(frame, 0)
-	if shown == 0 then ns.Print("no icon picture showing on the target frame") end
-end
-
 -- /serene debug mouse: the frames under the mouse pointer, what they are made of, and their parents up the line (kept
 -- in SereneDB.probeMouse too). One that looks like an aura (a square picture with a swirl or a count) is dressed at
--- once, and its parent remembered: others from there are dressed from then on.
+-- once.
 function ns.AuraMouseDump()
 	local out = {}
 	local foci = GetMouseFoci and { Safe(GetMouseFoci) } or {}
@@ -1523,10 +1119,7 @@ function ns.AuraMouseDump()
 		if LooksLikeAura(f) then
 			pcall(PlateExtras, f)
 			pcall(Dress, f, "unit", true)
-			if dressed[f] then
-				out[#out + 1] = "  dressed it"
-				if okParent and parent then auraParents[parent] = true end
-			end
+			if dressed[f] then out[#out + 1] = "  dressed it" end
 		end
 	end
 	if ns.db then ns.db.probeMouse = out end

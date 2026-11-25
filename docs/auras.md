@@ -56,7 +56,7 @@ There are two swirls because one Cooldown can't be both a ring around the icon a
 
 ### Nameplates
 
-Cooldown timing on nameplates never passes through Lua, so neither the hooks nor `Replay` see anything there. For plates (`a.gameDims`) the game's own cooldown is turned into the darkening instead: reversed, black at `DIM`, covering the icon and ring. `SwipeColor`, `Ring`, `Dim` and `Track` all step aside for plate icons, so plate icons have no draining ring. `/serene debug plates` records which timing calls, if any, reach plate swirls.
+Cooldown timing on nameplates never passes through Lua, so neither the hooks nor `Replay` see anything there. For plates (`a.gameDims`) the game's own cooldown is turned into the darkening instead: reversed, black at `DIM`, covering the icon and ring. `SwipeColor`, `Ring`, `Dim` and `Track` all step aside for plate icons, so plate icons have no draining ring.
 
 ### Colours and time text
 
@@ -68,7 +68,7 @@ The time text is shrunk and muted. Serene can't read the remaining time, but the
 
 ### Exports
 
-Auras.lua also provides what the other two files build on: `ns.AuraStyle` (`Look`, `KINDS`, `Quieter`...), `ns.SereneAuraFrame()` (whether AuraFrame takes over the player's auras), `ns.AuraContainers(frame)` (the game's aura holders under a frame) and `ns.AURA_FONT_AUTO`. The specialised debug dumps (`/serene debug auraholder`, `plates`, `targeticons`, `mouse`, `targetauras`) live here as well.
+Auras.lua also provides what the other two files build on: `ns.AuraStyle` (`Look`, `KINDS`, `Quieter`...), `ns.SereneAuraFrame()` (whether AuraFrame takes over the player's auras), `ns.AuraContainers(frame)` (the game's aura holders under a frame) and `ns.AURA_FONT_AUTO`. `/serene debug mouse`, which describes the frames under the mouse and dresses one that looks like an aura, lives here as well.
 
 ## AuraFrame.lua: your buffs and debuffs
 
@@ -132,7 +132,7 @@ Debuff rings are coloured by the game through `AddDispelTypeTexture` with the co
 
 `PlaceHolders` anchors the buffs by their top-right corner at `auraAt` if you've moved them, otherwise at the game's `BuffFrame`, which Edit Mode positions. They grow left, `auraPerRow` to a row. Debuffs go under the buffs, beside your portrait, or wherever you dragged them (`auraDebuffFree`). `/serene aurasmove` (`ns.AuraMove`) shows two movers to drag; they have a fixed size because the containers' own size can be secret. `ns.AuraReset` returns both to the default place.
 
-`PutGameAway` doesn't touch `BuffFrame`, `DebuffFrame` or `TemporaryEnchantFrame` themselves. It silences the `AuraContainer` inside each (`Silence`: alpha 0 and scale 0.01, re-applied from `SetAlpha` and `SetScale` hooks) and makes the collapse arrow invisible and unclickable. The outer frames stay shown and in place, which is what lets Edit Mode keep positioning `BuffFrame`, and Serene's buffs follow it. Only a frame with no inner container is reparented to a hidden frame instead.
+`PutGameAway` doesn't touch `BuffFrame`, `DebuffFrame` or `TemporaryEnchantFrame` themselves. It silences the `AuraContainer` inside each (`ns.Silence`: alpha 0 and scale 0.01, re-applied from `SetAlpha` and `SetScale` hooks) and makes the collapse arrow invisible and unclickable. The outer frames stay shown and in place, which is what lets Edit Mode keep positioning `BuffFrame`, and Serene's buffs follow it. Only a frame with no inner container is reparented to a hidden frame instead.
 
 ### Ghost buffs
 

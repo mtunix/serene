@@ -23,7 +23,6 @@ local GAP = 4
 local PER_ROW = 8                -- (about as wide as the card)
 local LIFT = 7                   -- above the card's name
 local MOST_DEBUFFS, MOST_BUFFS = 16, 32 -- (as many as the game shows)
-local TINY = 0.01                -- the game's holder shrunk to this (too small to catch the mouse)
 
 local UNITS = { target = "TargetFrame", focus = "FocusFrame" }
 local NAMES = { target = "SereneTargetAuras", focus = "SereneFocusAuras" }
@@ -235,23 +234,7 @@ end
 
 -- The game's own icons put out of sight -----------------------------------------------------------------------------------
 
--- (unseen, and too small to catch the mouse; again whenever the game sets them back)
-local silenced = {}
-local function Silence(holder)
-	if silenced[holder] then return end
-	silenced[holder] = true
-	local holding = false
-	local function Again()
-		if holding then return end
-		holding = true
-		pcall(holder.SetAlpha, holder, 0)
-		pcall(holder.SetScale, holder, TINY)
-		holding = false
-	end
-	Again()
-	hooksecurefunc(holder, "SetAlpha", Again)
-	hooksecurefunc(holder, "SetScale", Again)
-end
+local Silence = ns.Silence -- (unseen, and too small to catch the mouse; again whenever the game sets them back)
 
 -- (the game's own aura holder under the card: its known path first, else the first holder found, never Serene's)
 local function GameHolder(frame)

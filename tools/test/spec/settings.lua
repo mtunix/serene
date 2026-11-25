@@ -5,25 +5,7 @@
 
 local ns = wow.load()
 
--- Saved, but not settings: state the files keep in SereneDB (so no default). A new one goes here, on purpose.
-local STATE = {
-	ungrouped = true, topHover = true,                 -- migration flags (Core.lua)
-	toastAt = true,                                   -- where the toasts appear (Toasts.lua)
-	auraAt = true, auraDebuffFree = true, auraShortSpells = true, -- AuraFrame.lua
-	topPos = true, gold = true,                       -- TopBar.lua (gold: money per character)
-	settingsPage = true,                              -- the settings panel's page last open
-	supplies = true,                                  -- BarSupplies.lua
-	ranks = true,                                     -- Ranks.lua
-	keyLearn = true,                                  -- BarKeys.lua
-	barUseBy = true,                                  -- BarUse.lua, per character
-	barSetsBy = true,                                 -- BarSets.lua, per character
-	namesSaved = true, namesKeyGiven = true,          -- Names.lua
-	tipCompare = true, tipCompareDone = true,         -- Tooltip.lua
-	merchantNoted = true, bagsNoted = true,           -- one-time notes said
-	bankPos = true, bagsPos = true,                   -- Bags.lua windows placed by hand
-	unitsDump = true, capture = true, capturing = true, -- debug dumps, Capture.lua
-}
-local function IsState(key) return STATE[key] or key:find("^probe") ~= nil end
+local function IsState(key) return ns.STATE[key] == true end
 
 local function Files()
 	local list = {}
@@ -68,27 +50,43 @@ test("every setting the files read is in DEFAULTS, or known saved state", functi
 			unknown[#unknown + 1] = ("%s:%d %s"):format(r.file, r.line, r.key)
 		end
 	end
-	eq(unknown, {}, "read but not declared (a typo, or a new piece of state for STATE above)")
+	eq(unknown, {}, "read but not declared (a typo, or a new piece of state for ns.STATE in Core.lua)")
 end)
 
-test("every default is used by some file", function()
+-- Every file's text, Core.lua's without its DEFAULTS and STATE blocks (where every key is named once anyway).
+local function UsedText()
 	local all = {}
 	for _, f in ipairs(Files()) do
 		local text = f.text
 		if f.name == "Core.lua" then
-			-- (Core.lua without its DEFAULTS block)
-			local s, e = text:find("ns%.DEFAULTS = %b{}")
-			text = text:sub(1, s - 1) .. text:sub(e + 1)
+			for _, block in ipairs({ "ns%.DEFAULTS = %b{}", "ns%.STATE = %b{}" }) do
+				local s, e = text:find(block)
+				text = text:sub(1, s - 1) .. text:sub(e + 1)
+			end
 		end
 		all[#all + 1] = text
 	end
-	local text = table.concat(all, "\n")
+	return table.concat(all, "\n")
+end
+
+test("every default is used by some file", function()
+	local text = UsedText()
 	local unused = {}
 	for key in pairs(ns.DEFAULTS) do
 		if not text:find("%f[%w_]" .. key .. "%f[^%w_]") then unused[#unused + 1] = key end
 	end
 	table.sort(unused)
 	eq(unused, {}, "declared in DEFAULTS but read nowhere")
+end)
+
+test("every piece of known saved state is kept by some file", function()
+	local text = UsedText()
+	local unused = {}
+	for key in pairs(ns.STATE) do
+		if not text:find("%f[%w_]" .. key .. "%f[^%w_]") then unused[#unused + 1] = key end
+	end
+	table.sort(unused)
+	eq(unused, {}, "in ns.STATE but kept nowhere")
 end)
 
 test("no setting is also used as a table of saved state", function()
@@ -262,6 +260,19 @@ for _, m in ipairs(MIGRATIONS) do
 	end)
 end
 
+test("saved keys no file reads any more are let go at login; settings and known state stay", function()
+	wow.login({ flight = true, softEdge = 2, probeHolder = { "old" }, rest = 35, gold = { realm = {} },
+		probeMouse = { "kept" }, bagPins = { [6948] = "Keys" } })
+	eq(ns.db.flight, nil, "flight")
+	eq(ns.db.softEdge, nil, "softEdge")
+	eq(ns.db.probeHolder, nil, "probeHolder")
+	eq(ns.db.rest, 35, "rest")
+	ok(type(ns.db.gold) == "table", "gold")
+	eq(ns.db.probeMouse[1], "kept", "probeMouse")
+	eq(ns.db.bagPins[6948], "Keys", "bagPins")
+	clean()
+end)
+
 test("logging in with your real saved settings (fixtures/saved_settings.lua)", function()
 	local chunk = loadfile(wow.root .. "/tools/test/fixtures/saved_settings.lua")
 	if not chunk then skip("no fixtures/saved_settings.lua: run tools/test/import_saved.py") end
@@ -274,18 +285,19 @@ test("logging in with your real saved settings (fixtures/saved_settings.lua)", f
 	wow.advance(2)
 	wow.fight(false)
 	wow.advance(2)
-	-- (every value the player chose survives login, but those a migration may rewrite)
+	-- (every value the player chose survives login, but those a migration may rewrite and those no file reads)
 	for key, value in pairs(copy) do
-		if type(value) ~= "table" and key ~= "auraTime" and key ~= "unitBorder" and key ~= "hintReveal" then
+		if type(value) ~= "table" and key ~= "auraTime" and key ~= "unitBorder" and key ~= "hintReveal"
+			and (ns.DEFAULTS[key] ~= nil or IsState(key)) then
 			eq(ns.db[key], value, "kept " .. key)
 		end
 	end
-	-- (and keys no file reads any more, said, not failed: they only take room)
+	-- (and keys no file reads any more are gone)
 	local stale = {}
-	for key in pairs(copy) do
-		if ns.DEFAULTS[key] == nil and not IsState(key) and key ~= "hintLast" then stale[#stale + 1] = key end
+	for key in pairs(ns.db) do
+		if ns.DEFAULTS[key] == nil and not IsState(key) then stale[#stale + 1] = key end
 	end
 	table.sort(stale)
-	if #stale > 0 then print("  note: saved keys no file reads any more: " .. table.concat(stale, ", ")) end
+	eq(stale, {}, "nothing saved that is neither a setting nor known state")
 	clean()
 end)

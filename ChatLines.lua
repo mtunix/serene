@@ -276,7 +276,6 @@ local function CopyBox(text, title)
 	box.edit:SetFocus()
 	box.edit:HighlightText()
 end
-ns.CopyBox = CopyBox
 
 -- The sheet: the window's whole history, to select from --------------------------------------------------------------
 

@@ -48,7 +48,6 @@ end
 function Serene_ToggleNames()
 	if Hidden() then Show() else Hide() end
 end
-function ns.NamesHidden() return Hidden() end
 BINDING_NAME_SERENE_NAMES = "Hide / show names over heads"
 
 -- The key: given once, at the first login with this, when nothing else (but an addon no longer here) holds it.

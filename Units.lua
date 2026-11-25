@@ -104,9 +104,7 @@ local active = false
 
 -- Finding the parts ------------------------------------------------------------------------------------------------
 
-local function IsRegion(value)
-	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
-end
+local IsRegion, IsTexture = ns.IsRegion, ns.IsTexture
 
 -- A key looked for in the frame and in the parts holding the others.
 local function Each(frame, keys, found, depth)
@@ -313,10 +311,6 @@ end
 
 local function Shown(region)
 	return region and Clean(Safe(region.IsShown, region)) and (Clean(Safe(region.GetHeight, region)) or 0) > 1
-end
-
-local function IsTexture(region)
-	return IsRegion(region) and Safe(region.IsObjectType, region, "Texture") == true
 end
 
 -- The portrait round in its new place: the game's mask stays where the game's frame had it, so it is taken off and
@@ -1510,7 +1504,6 @@ local function Dress(frame, name)
 			if show then
 				local fill = Safe(bar.GetStatusBarTexture, bar)
 				local width = fill and Clean(Safe(fill.GetWidth, fill))
-				local whole = Clean(Safe(bar.GetWidth, bar))
 				local shownFill = fill and Clean(Safe(fill.IsShown, fill)) ~= false
 				if type(width) == "number" then -- (unreadable in a fight: taken as filled)
 					show = shownFill and width > 0.5

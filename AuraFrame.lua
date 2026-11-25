@@ -741,23 +741,7 @@ end
 -- The game's own frames put out of sight -----------------------------------------------------------------------------------
 
 local hidden
-local silenced = {}
-local TINY = 0.01
-local function Silence(container)
-	if silenced[container] then return end
-	silenced[container] = true
-	local holding = false
-	local function Again()
-		if holding then return end
-		holding = true
-		pcall(container.SetAlpha, container, 0)
-		pcall(container.SetScale, container, TINY)
-		holding = false
-	end
-	Again()
-	hooksecurefunc(container, "SetAlpha", Again)
-	hooksecurefunc(container, "SetScale", Again)
-end
+local Silence = ns.Silence
 
 -- (the frames stay where Edit Mode put them, so Serene's can sit there; what they show is made unseen)
 local function PutGameAway()

@@ -63,7 +63,6 @@ local flySlots, flyList = {}, {} -- the panel's slots; the icons in them, in ord
 local flyShow = 0                -- the panel's opening, 0 (closed) to 1 (open)
 local flyH = -1                  -- the side it opens to: -1 left, 1 right (it grows up from its button)
 local hover, lastNear = 0, -math.huge -- the round buttons' opacity; when the mouse was last near the compass
-local buttons = {} -- frame -> true: shown under the mouse
 local letters = {}
 local laidWidth, laidFacing, laidSquare, laidH, laidV -- (what Layout last placed for: unchanged, it does nothing)
 
@@ -149,13 +148,6 @@ end
 function ns.QueueShown()
 	for _, frame in ipairs(ns.QueueFrames()) do
 		if Safe(frame.IsShown, frame) then return frame end
-	end
-end
-
-local function Named(holder, find)
-	for _, child in ipairs({ holder:GetChildren() }) do
-		local name = child.GetName and child:GetName()
-		if type(name) == "string" and name:find(find) then return child end
 	end
 end
 
