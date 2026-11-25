@@ -1,0 +1,50 @@
+## Interface: 16001
+## Title: Serene
+## Notes: A calm interface: chat in glass (a soft backdrop behind each message, nothing else), a clean minimap, and an interface that fades away when you don't need it and comes back on hover, in combat or with a target.
+## Version: 1.0.0
+## Author: Lindford
+## OptionalDeps: Questie
+## SavedVariables: SereneDB
+
+Core.lua
+Capture.lua
+Actions.lua
+Items.lua
+Tooltip.lua
+Chat.lua
+ChatLoot.lua
+ChatLines.lua
+ChatCard.lua
+ChatShell.lua
+Minimap.lua
+Hints.lua
+ActionBars.lua
+Ready.lua
+BarCooldowns.lua
+BarKeys.lua
+BarPages.lua
+Ranks.lua
+Reagents.lua
+BarPing.lua
+BarSets.lua
+BarSupplies.lua
+BarUse.lua
+MenuBar.lua
+Experience.lua
+Toasts.lua
+Fade.lua
+Swing.lua
+Units.lua
+CastBar.lua
+Auras.lua
+UnitAuras.lua
+AuraFrame.lua
+Regen.lua
+TopBar.lua
+Tracker.lua
+Names.lua
+Merchant.lua
+Vendor.lua
+Bags.lua
+Modes.lua
+Settings.lua

@@ -1,0 +1,11 @@
+# Claude Code's local files
+.claude/
+
+# your SavedVariables turned into fixtures (tools/test/import_saved.py): characters, realm, captured lines
+tools/test/fixtures/
+
+# reference data (a listing of wow-ui-source); reference sources live outside the addon
+tree.json
+
+__pycache__/
+*.pyc

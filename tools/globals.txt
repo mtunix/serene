@@ -1,0 +1,50 @@
+# The globals Serene's files may use (read by tools/check.py). A name not listed here is reported as unknown.
+# Add a name only when it is meant: a game API you checked exists on this client (Wow.exe, wow-ui-source's forever
+# branch, or another addon using it), never to silence a typo. Names looked up by string (_G["X"], rawget(_G, "X"))
+# don't need to be here. Sections are for reading; only "# Serene writes" means something to the check.
+
+# Lua and the game's Lua extensions
+_G assert bit date debug error format getmetatable ipairs math next pairs pcall print rawget rawset select
+setmetatable string strjoin strsplit strtrim table time tinsert tonumber tostring tremove type unpack wipe
+xpcall
+
+# The game's functions and namespaces
+Ambiguate BreakUpLargeNumbers BuyMerchantItem C_AddOns C_Bank C_Calendar C_ChatInfo C_ClassColor C_Container
+C_CurrencyInfo C_CurveUtil C_CVar C_EquipmentSet C_FriendList C_GuildInfo C_Item C_LFGList C_Map
+C_MerchantFrame C_NamePlate C_NewItems C_PartyInfo C_PlayerInteractionManager C_Spell C_SpellBook C_Texture
+C_Timer C_TooltipInfo C_UnitAuras ClearCursor CreateColor CreateFont CreateFrame CreateMacro
+CreateUnitHealPredictionCalculator CursorHasItem DeleteCursorItem EditMacro EnumerateFrames GameTime_GetTime
+GetActionInfo GetActionText GetAddOnMemoryUsage GetBattlefieldEstimatedWaitTime GetBattlefieldStatus
+GetBattlefieldTimeWaited GetBindingAction GetBindingKey GetBindingText GetBindLocation GetCoinTextureString
+GetCurrentBindingSet GetCursorInfo GetCursorPosition GetCVar GetFramerate GetGameTime GetGuildInfo
+GetGuildRosterInfo GetInventoryItemDurability GetInventoryItemID GetInventoryItemLink GetInventoryItemTexture
+GetItemCount GetItemInfo GetItemInfoInstant GetLFGMode GetLFGQueueStats GetLootThreshold GetMacroIndexByName
+GetMacroInfo GetMacroItem GetMacroSpell GetMaxBattlefieldID GetMaxLevelForPlayerExpansion GetMaxPlayerLevel
+GetMerchantItemID GetMerchantItemInfo GetMerchantItemLink GetMerchantItemMaxStack GetMinimapZoneText GetMoney
+GetMouseFoci GetMouseFocus GetNetStats GetNumGroupMembers GetNumGuildMembers GetPhysicalScreenSize
+GetPlayerFacing GetPlayerInfoByGUID GetRaidRosterInfo GetRealmName GetSpellInfo GetSubZoneText GetTime
+GetUnitName GetUnitSpeed GetWeaponEnchantInfo GetXPExhaustion GetZonePVPInfo GetZoneText GuildRoster
+HandleModifiedItemClick HasAction hooksecurefunc InCombatLockdown IsAltKeyDown IsAutoRepeatSpell
+IsControlKeyDown IsCurrentSpell IsInGroup IsInGuild IsInRaid IsLoggedIn IsModifiedClick IsMounted
+IsMouseButtonDown IsPlayerSpell IsResting issecretvalue IsShiftKeyDown IsSpellKnown PickupAction PickupMacro
+ReloadUI SaveBindings SetBinding SetCVar StaticPopup_Show UnitAffectingCombat UnitAttackSpeed UnitBuff
+UnitCanAttack UnitCastingInfo UnitChannelInfo UnitClass UnitClassification UnitDebuff UnitExists
+UnitFactionGroup UnitFrameHealPredictionBars_Update UnitGetDetailedHealPrediction UnitHealth UnitHealthMax
+UnitInVehicle UnitIsAFK UnitIsConnected UnitIsDead UnitIsDeadOrGhost UnitIsDND UnitIsPlayer UnitIsTapDenied
+UnitIsUnit UnitLevel UnitName UnitOnTaxi UnitPower UnitPowerMax UnitPowerType UnitRace UnitRangedDamage
+UnitReaction UnitSex UnitXP UnitXPMax UpdateAddOnMemoryUsage
+
+# The game's frames, fonts, tables and mixins
+AnchorUtil CHAT_FRAMES ChatFontNormal ChatFrame1 ChatTypeInfo DEFAULT_CHAT_FRAME Enum EventRegistry
+GameFontDisableSmall GameFontHighlight GameFontHighlightSmall GameFontNormalSmall GameTooltip
+ITEM_QUALITY_COLORS LibStub LOCALIZED_CLASS_NAMES_FEMALE LOCALIZED_CLASS_NAMES_MALE Minimap MinimapCluster
+RAID_CLASS_COLORS Settings SlashCmdList StaticPopupDialogs TooltipUtil UIParent UISpecialFrames WorldFrame
+
+# The game's constants and strings
+BANK_CONTAINER FRIENDS_LIST_OFFLINE INVSLOT_MAINHAND INVSLOT_OFFHAND INVSLOT_RANGED LEVEL
+MAX_BATTLEFIELD_QUEUES MAX_PLAYER_LEVEL NEW_RECIPE_LEARNED_TITLE NUM_BAG_SLOTS NUM_BANKBAGSLOTS
+NUM_CHAT_WINDOWS NUM_CONTAINER_FRAMES STANDARD_TEXT_FONT WHO_LIST_FORMAT WHO_LIST_GUILD_FORMAT YOU
+
+# Serene writes (its saved variables, slash command, key bindings' names and functions)
+BINDING_HEADER_SERENE BINDING_NAME_SERENE_NAMES BINDING_NAME_SERENE_PEEK BINDING_NAME_SERENE_TRACKER
+Serene_Peek Serene_ToggleNames Serene_ToggleTracker SereneDB SLASH_SERENE1
