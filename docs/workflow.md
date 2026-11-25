@@ -51,6 +51,8 @@ The specs:
 
 When a test fails because the stub is too simple, improve the stub, or stub the missing piece at the top of the spec. When it fails because of the addon, fix the addon. A test's expectation should never be changed to match a bug. While working, run only the specs for the area you touched; run the whole suite and `check.py` once at the end.
 
+GitHub runs `check.py` and the whole suite on every push to `main` and every pull request (`.github/workflows/check.yml`), with the versions of `lupa` and `luaparser` pinned there. It has no fixtures, so the tests that need them skip.
+
 If you change a large file with a script, check that each search string occurs exactly once before replacing it; many of these files repeat similar lines.
 
 `tools/test/globalstrings.lua` holds the game's English sentences that Serene refers to, taken from the classic-era GlobalStrings. After a file starts using a new one, regenerate it with `python3 tools/test/gen_globalstrings.py`.

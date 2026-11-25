@@ -96,6 +96,7 @@ Modules initialise in TOC order, which is the order of this table.
 | `Media/` | Holds Serene's textures; the scripts that make them are in `tools/media/`. |
 | `tools/check.py` | Checks every file for parse errors, unknown globals, locals used too early and accidental globals. |
 | `tools/test/` | Runs the addon's logic outside the game against a stub of the client ([workflow.md](workflow.md)). |
+| `.github/workflows/check.yml` | Runs the check and the tests on GitHub for every push to `main` and every pull request. |
 
 Two names are easy to mix up. `Vendor.lua` is the merchant window and is switched by the setting `merchant`; `Merchant.lua` buys full stacks and is switched by the setting `vendor`.
 

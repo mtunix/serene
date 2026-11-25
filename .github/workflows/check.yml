@@ -1,0 +1,27 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: pip install --target ~/.cache/serene-tools/py lupa==2.8 luaparser==4.2.0
+      - name: Static check
+        run: python3 tools/check.py
+      - name: Tests
+        run: python3 tools/test/run.py
