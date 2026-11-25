@@ -236,6 +236,87 @@ test("at a banker, \"tabs\": how full each tab is, and buying one more on the ga
 	clean()
 end)
 
+-- Make room (BagRoom.lua) and the small menu (BagMenu.lua) ---------------------------------------------------------------
+
+local function Click(word) word:GetScript("OnClick")(word, "LeftButton") end
+
+local function Printed(pattern)
+	for _, line in ipairs(wow.printed) do
+		if type(line) == "string" and line:find(pattern) then return line end
+	end
+end
+
+test("make room: the stack a vendor pays least for; skip: the next; keep: never again", function()
+	-- (linen 13 x5 = 65, water 1 x3 = 3, the sword 7, the quest papers nothing)
+	wow.bags[0] = { size = 16, [1] = { id = 2589, count = 5 }, [2] = { id = 159, count = 3 }, [3] = { id = 25 },
+		[4] = { id = 745, quest = true } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	no(SereneBagsRoom and SereneBagsRoom:IsShown(), "not by itself: the bags have room")
+	Click(SereneBags.roomWord)
+	ok(SereneBagsRoom:IsShown(), "the glass")
+	eq(ns.BagRoom.Suggested(), "0:2", "the water, worth least")
+	ok(SereneBagsRoom.name:GetText():find("Refreshing Spring Water", 1, true), "named")
+	Click(SereneBagsRoom.skip)
+	eq(ns.BagRoom.Suggested(), "0:3", "skipped: the sword next")
+	Click(SereneBagsRoom.keep)
+	ok(ns.db.bagKeep[25], "the sword kept")
+	eq(ns.BagRoom.Suggested(), "0:1", "then the linen")
+	Click(SereneBagsRoom.close)
+	no(SereneBagsRoom:IsShown(), "closed")
+	Click(SereneBags.roomWord)
+	eq(ns.BagRoom.Suggested(), "0:2", "opened again: what was skipped is back, what was kept is not")
+	clean()
+end)
+
+test("make room opens by itself when the bags open full", function()
+	wow.bags[0] = { size = 2, [1] = { id = 2589, count = 5 }, [2] = { id = 159, count = 3 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	ok(SereneBagsRoom and SereneBagsRoom:IsShown())
+	clean()
+end)
+
+test("make room's delete: the slot read again first; changed meanwhile, nothing is deleted", function()
+	wow.bags[0] = { size = 16, [1] = { id = 2589, count = 5 }, [2] = { id = 159, count = 3 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	Click(SereneBags.roomWord)
+	wow.bags[0][2].count = 2 -- (one drunk since)
+	Click(SereneBagsRoom.delete)
+	eq(Printed("deleted"), nil, "not deleted, nothing said")
+	eq(ns.BagRoom.Suggested(), "0:2", "suggested again, as it is now")
+	Click(SereneBagsRoom.delete)
+	ok(Printed("^.-deleted |c"), "deleted, and said so with its link")
+	no(SereneBagsRoom:IsShown(), "the glass closed")
+	clean()
+end)
+
+test("Alt-right-click an item: the menu of sections; a choice pins it there", function()
+	wow.bags[0] = { size = 16, [1] = { id = 2589, count = 5 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	local button = SereneBagsItem1
+	wow.alt = true
+	button:_Fire("OnClick", "RightButton")
+	wow.alt = nil
+	ok(SereneBagsMenu:IsShown(), "the menu")
+	local consumables
+	for _, row in ipairs(SereneBagsMenu.rows) do
+		if row:IsShown() and row.text:GetText() == "Consumables" then consumables = row end
+	end
+	ok(consumables, "the bags' own sections offered")
+	consumables:GetScript("OnClick")(consumables)
+	eq(ns.db.bagPins[2589], "Consumables", "pinned")
+	no(SereneBagsMenu:IsShown(), "closed")
+	SereneBags:Hide()
+	clean()
+end)
+
 test("bags switched off: no bags made, the game's untouched", function()
 	wow.login({ bags = false })
 	wow.advance(1)

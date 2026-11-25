@@ -4,12 +4,15 @@
     python3 tools/check.py                 # every .lua file in the addon; exit 1 on a problem
     python3 tools/check.py Auras.lua       # some files
     python3 tools/check.py --list          # each file's globals (to read by eye)
+    python3 tools/check.py --calls         # the game's functions called directly, not through pcall or Safe
 
 It follows Lua's scopes (a local is seen only after its `local` line, inside its block), so it catches:
   * a typo: `Clena(x)` reads a global no one defines;
   * a local used above its definition: nil at call time;
   * a forgotten `local`: an assignment that makes a global by accident;
   * a local never read: a function no one calls, a value no one looks at (a name starting with _ is meant so);
+  * a game function called by name that may not exist on this client: called through pcall or Safe, or guarded
+    (X and X()), unless tools/globals.txt lists it among those always there;
   * on a run over every file: an ns.X set but read nowhere, neither in the addon nor in tools/test; and a name in
     tools/globals.txt that no file uses any more (Lua's own section aside: always there, harmless).
 
@@ -31,20 +34,31 @@ ALLOW = os.path.join(HERE, "tools", "globals.txt")
 
 
 def load_allowed():
-    """The names allowed to be read, to be written, and those that should be in use (the game's, Serene's)."""
+    """The names allowed to be read, to be written, those that should be in use (the game's, Serene's), and the
+    game's functions and namespaces."""
     reads, writes, game, section = set(), set(), set(), None
+    functions, direct = set(), set()
+    comment = False
     for raw in open(ALLOW, encoding="utf-8"):
         line = raw.strip()
         if line.startswith("#"):
-            section = line.lower()
+            # (a section is named by the first line of its comment; the lines after it only explain)
+            if not comment:
+                section = line.lower()
+            comment = True
             continue
+        comment = False
         for name in line.split():
             reads.add(name)
             if section and section.startswith("# serene writes"):
                 writes.add(name)
             if section and not section.startswith("# lua"):
                 game.add(name)
-    return reads, writes, game
+            if section and section.startswith("# the game's functions"):
+                functions.add(name)
+            if section and section.startswith("# the game's functions called by name"):
+                direct.add(name)
+    return reads, writes, game, functions, direct
 
 
 # (luaparser 4.x keeps no line on most nodes: 0 then, and check() finds the line in the text)
@@ -80,6 +94,8 @@ class Scopes:
         self.declared_anywhere = {}  # local name -> first line it is declared (for "used above its definition")
         self.unused = []             # Bindings never read
         self.ns_writes, self.ns_reads = {}, set()
+        self.calls = []              # (what, line, guarded): a global function or a namespace's, called by name
+        self.guarded = set()         # the calls made only if their function is there: X and X()
 
     def known(self, name):
         return any(name in scope for scope in self.stack)
@@ -151,6 +167,34 @@ class Scopes:
         self.visit(node.value)
         if node.notation == astnodes.IndexNotation.SQUARE:
             self.visit(node.idx)
+
+    def callee(self, func):
+        """A global function's name, or a global namespace's function (C_Bank.X); None for anything else."""
+        if isinstance(func, astnodes.Name) and not self.known(func.id):
+            return func.id
+        if (isinstance(func, astnodes.Index) and func.notation == astnodes.IndexNotation.DOT
+                and isinstance(func.value, astnodes.Name) and not self.known(func.value.id)
+                and isinstance(func.idx, astnodes.Name)):
+            return func.value.id + "." + func.idx.id
+        return None
+
+    def visit_AndLoOp(self, node):
+        # (X and X(...): called only where the game has it)
+        right = node.right
+        if isinstance(right, astnodes.Call):
+            name = self.callee(right.func)
+            if name and name == self.callee(node.left):
+                self.guarded.add(id(right))
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_Call(self, node):
+        # (called by name: a global, or a function of a global namespace; pcall(X) and Safe(X) aren't calls of X)
+        what = self.callee(node.func)
+        if what:
+            self.calls.append((what, line_of(node), id(node) in self.guarded))
+        self.visit(node.func)
+        self.visit(node.args)
 
     def visit_Invoke(self, node):
         self.visit(node.source)
@@ -245,7 +289,7 @@ def find_line(text, pattern, after=0):
     return 0
 
 
-def check(path, allowed_reads, allowed_writes, listing):
+def check(path, allowed_reads, allowed_writes, listing, functions=frozenset(), direct=frozenset()):
     text = open(path, encoding="utf-8").read()
     try:
         tree = ast.parse(text)
@@ -277,6 +321,12 @@ def check(path, allowed_reads, allowed_writes, listing):
         if name not in allowed_writes:
             line = line or find_line(text, r"(^|[^\w.:])" + re.escape(name) + r"\s*=[^=]")
             problems.append(f"line {line}: assigns the global '{name}' (a forgotten 'local'?)")
+    for what, line, guarded in walker.calls:
+        root = what.split(".")[0]
+        if root in functions and root not in direct and what not in direct and not guarded:
+            line = line or find_line(text, re.escape(what) + r"\s*\(")
+            problems.append(f"line {line}: '{what}' called by name: through pcall or Safe, or guarded ({what} and "
+                            f"{what}()), unless it is always there (tools/globals.txt)")
     for binding in sorted(walker.unused, key=lambda b: b.line):
         what = "local function" if binding.kind == "function" else "local"
         problems.append(f"line {binding.line}: {what} '{binding.name}' is never read (dead code? '_' if meant)")
@@ -294,26 +344,38 @@ def spec_reads():
 
 
 def main(argv):
-    listing = "--list" in argv
+    listing = "--list" in argv or "--calls" in argv
     paths = [a for a in argv if not a.startswith("--")]
     # (ns fields are set in one file and read in another: weighed only when every file is read)
     everything = not paths
     if everything:
         # (the addon's own files only: the tests' Lua under tools/ defines its own globals)
         paths = sorted(p for p in os.listdir(HERE) if p.endswith(".lua"))
-    allowed_reads, allowed_writes, expected = load_allowed()
+    allowed_reads, allowed_writes, expected, functions, direct = load_allowed()
     failed = False
     walkers = {}
     for path in paths:
         full = path if os.path.isabs(path) else os.path.join(HERE, path)
-        problems, names, walkers[path] = check(full, allowed_reads, allowed_writes, listing)
+        problems, names, walkers[path] = check(full, allowed_reads, allowed_writes, listing, functions, direct)
         if listing:
-            print(f"{path}: {', '.join(names)}")
+            if "--list" in argv:
+                print(f"{path}: {', '.join(names)}")
             continue
         if problems:
             failed = True
             for problem in problems:
                 print(f"{path}: {problem}")
+    if "--calls" in argv:
+        # (by function: how often, and where; the game's own only, Lua's and Serene's left out)
+        found = {}
+        for path, walker in walkers.items():
+            for what, line, guarded in (walker.calls if walker else []):
+                if what.split(".")[0] in functions:
+                    found.setdefault(what, []).append(f"{path}:{line}" + (" (guarded)" if guarded else ""))
+        for what, places in sorted(found.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            print(f"{len(places):4d}  {what}  ({', '.join(places[:4])}{', ...' if len(places) > 4 else ''})")
+        print(f"calls: {sum(len(p) for p in found.values())} direct calls of {len(found)} functions")
+        return 0
     if everything and not listing:
         read = spec_reads()
         for walker in walkers.values():

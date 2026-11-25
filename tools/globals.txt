@@ -1,7 +1,8 @@
 # The globals Serene's files may use (read by tools/check.py). A name not listed here is reported as unknown.
 # Add a name only when it is meant: a game API you checked exists on this client (Wow.exe, wow-ui-source's forever
 # branch, or another addon using it), never to silence a typo. Names looked up by string (_G["X"], rawget(_G, "X"))
-# don't need to be here. Sections are for reading; only "# Serene writes" means something to the check.
+# don't need to be here. A section is named by its first comment line. Two mean something to the check: "# Serene
+# writes" (the names its files may assign) and "# The game's functions called by name" (called without pcall).
 
 # Lua and the game's Lua extensions
 _G assert bit date debug error format getmetatable ipairs math next pairs pcall print rawget rawset select
@@ -10,29 +11,31 @@ xpcall
 
 # The game's functions and namespaces
 Ambiguate BreakUpLargeNumbers BuyMerchantItem C_AddOns C_Bank C_Calendar C_ChatInfo C_ClassColor C_Container
-C_CurrencyInfo C_CurveUtil C_CVar C_EquipmentSet C_FriendList C_GuildInfo C_Item C_LFGList C_Map
-C_MerchantFrame C_NamePlate C_NewItems C_PartyInfo C_PlayerInteractionManager C_Spell C_SpellBook C_Texture
-C_Timer C_TooltipInfo C_UnitAuras ClearCursor CreateColor CreateFont CreateFrame CreateMacro
-CreateUnitHealPredictionCalculator CursorHasItem DeleteCursorItem EditMacro EnumerateFrames GameTime_GetTime
-GetActionInfo GetActionText GetAddOnMemoryUsage GetBattlefieldEstimatedWaitTime GetBattlefieldStatus
-GetBattlefieldTimeWaited GetBindingAction GetBindingKey GetBindingText GetBindLocation GetCoinTextureString
-GetCurrentBindingSet GetCursorInfo GetCursorPosition GetCVar GetFramerate GetGameTime GetGuildInfo
+C_CurrencyInfo C_CurveUtil C_CVar C_EquipmentSet C_FriendList C_GuildInfo C_Item C_LFGList C_Map C_MerchantFrame
+C_NamePlate C_NewItems C_PartyInfo C_PlayerInteractionManager C_Spell C_SpellBook C_Texture C_TooltipInfo
+C_UnitAuras ClearCursor CreateMacro CreateUnitHealPredictionCalculator CursorHasItem DeleteCursorItem EditMacro
+ GameTime_GetTime GetActionInfo GetActionText GetAddOnMemoryUsage GetBattlefieldEstimatedWaitTime
+GetBattlefieldStatus GetBattlefieldTimeWaited GetBindingAction GetBindingKey GetBindingText GetBindLocation
+GetCoinTextureString GetCurrentBindingSet GetCursorInfo GetCVar GetFramerate GetGameTime GetGuildInfo
 GetGuildRosterInfo GetInventoryItemDurability GetInventoryItemID GetInventoryItemLink GetInventoryItemTexture
 GetItemCount GetItemInfo GetItemInfoInstant GetLFGMode GetLFGQueueStats GetLootThreshold GetMacroIndexByName
 GetMacroInfo GetMacroItem GetMacroSpell GetMaxBattlefieldID GetMaxLevelForPlayerExpansion GetMaxPlayerLevel
 GetMerchantItemID GetMerchantItemInfo GetMerchantItemLink GetMerchantItemMaxStack GetMinimapZoneText GetMoney
-GetMouseFoci GetMouseFocus GetNetStats GetNumGroupMembers GetNumGuildMembers GetPhysicalScreenSize
-GetPlayerFacing GetPlayerInfoByGUID GetRaidRosterInfo GetRealmName GetSpellInfo GetSubZoneText GetTime
-GetUnitName GetUnitSpeed GetWeaponEnchantInfo GetXPExhaustion GetZonePVPInfo GetZoneText GuildRoster
-HandleModifiedItemClick HasAction hooksecurefunc InCombatLockdown IsAltKeyDown IsAutoRepeatSpell
-IsControlKeyDown IsCurrentSpell IsInGroup IsInGuild IsInRaid IsLoggedIn IsModifiedClick IsMounted
-IsMouseButtonDown IsPlayerSpell IsResting issecretvalue IsShiftKeyDown IsSpellKnown PickupAction PickupMacro
-ReloadUI SaveBindings SetBinding SetCVar StaticPopup_Show UnitAffectingCombat UnitAttackSpeed UnitBuff
-UnitCanAttack UnitCastingInfo UnitChannelInfo UnitClass UnitClassification UnitDebuff UnitExists
+GetMouseFoci GetMouseFocus GetNetStats GetNumGroupMembers GetNumGuildMembers GetPlayerFacing GetPlayerInfoByGUID
+GetRaidRosterInfo GetRealmName GetSpellInfo GetSubZoneText GetUnitName GetUnitSpeed GetWeaponEnchantInfo
+GetXPExhaustion GetZonePVPInfo GetZoneText GuildRoster HandleModifiedItemClick HasAction IsAutoRepeatSpell
+IsCurrentSpell IsInGroup IsInGuild IsInRaid IsMounted IsPlayerSpell IsResting issecretvalue IsSpellKnown
+PickupAction PickupMacro SaveBindings SetBinding SetCVar StaticPopup_Show UnitAffectingCombat UnitAttackSpeed
+UnitBuff UnitCanAttack UnitCastingInfo UnitChannelInfo UnitClass UnitClassification UnitDebuff UnitExists
 UnitFactionGroup UnitFrameHealPredictionBars_Update UnitGetDetailedHealPrediction UnitHealth UnitHealthMax
 UnitInVehicle UnitIsAFK UnitIsConnected UnitIsDead UnitIsDeadOrGhost UnitIsDND UnitIsPlayer UnitIsTapDenied
-UnitLevel UnitName UnitOnTaxi UnitPower UnitPowerMax UnitPowerType UnitRace UnitRangedDamage
-UnitReaction UnitSex UnitXP UnitXPMax UpdateAddOnMemoryUsage
+UnitLevel UnitName UnitOnTaxi UnitPower UnitPowerMax UnitPowerType UnitRace UnitRangedDamage UnitReaction UnitSex
+UnitXP UnitXPMax UpdateAddOnMemoryUsage
+
+# The game's functions called by name: always there on this client, so no pcall (any other game function goes
+# through pcall or Safe, or is guarded: X and X(); tools/check.py reports one that isn't)
+C_Timer CreateColor CreateFont CreateFrame EnumerateFrames GetCursorPosition GetPhysicalScreenSize GetTime hooksecurefunc
+InCombatLockdown IsAltKeyDown IsControlKeyDown IsLoggedIn IsModifiedClick IsMouseButtonDown IsShiftKeyDown ReloadUI
 
 # The game's frames, fonts, tables and mixins
 AnchorUtil CHAT_FRAMES ChatFontNormal ChatFrame1 ChatTypeInfo DEFAULT_CHAT_FRAME Enum EventRegistry

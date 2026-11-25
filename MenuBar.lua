@@ -137,16 +137,10 @@ end
 
 -- Bags -----------------------------------------------------------------------------------------------------------------
 
+-- (ordinary bags only: a quiver's or a soul bag's room isn't room for your things; nil: no bags read)
 local function FreeSlots()
-	local get = C_Container and C_Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots
-	if not get then return nil end
-	local free = 0
-	for bag = 0, (_G.NUM_BAG_SLOTS or 4) do
-		-- (ordinary bags only: a quiver's or a soul bag's room isn't room for your things)
-		local count, family = get(bag)
-		count, family = Clean(count), Clean(family)
-		if type(count) == "number" and (family == 0 or family == nil) then free = free + count end
-	end
+	local free, total = ns.Items.Room()
+	if total == 0 then return nil end
 	return free
 end
 

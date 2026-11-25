@@ -1,6 +1,6 @@
 # Bags, bank and merchant
 
-Six files work together here. `Items.lua` reads the bags and the bank's containers and decides what an item is; `Inventory.lua` remembers what every character carries; `Bags.lua` draws the bags and bank windows, and `BagSlots.lua` the rows of bag slots and bank tabs under their headers; `Vendor.lua` draws the merchant window and sells junk and repairs at every merchant; `Merchant.lua` buys full stacks and restyles the game's how-many popup.
+Eight files work together here. `Items.lua` reads the bags and the bank's containers and decides what an item is; `Inventory.lua` remembers what every character carries; `Bags.lua` draws the bags and bank windows, `BagSlots.lua` the rows of bag slots and bank tabs under their headers, `BagRoom.lua` "make room" above the bags and `BagMenu.lua` the small menu they open; `Vendor.lua` draws the merchant window and sells junk and repairs at every merchant; `Merchant.lua` buys full stacks and restyles the game's how-many popup.
 
 The file names and their settings are crossed:
 
@@ -17,7 +17,7 @@ The bags, bank and merchant are Serene's own windows. The game's windows still e
 
 `ns.Items` is the one place that answers "what is in this slot and where does it belong". Bags, Vendor, Merchant and Tooltip all go through it.
 
-`Items.Bags()` lists the player's containers: bags 0 to `NUM_BAG_SLOTS`, plus the reagent bag and the keyring where the client has them. `Items.FreeSlots(bag)` gives the room left in a bag and its family (what kind of bag it is). `Items.BankTabs()` lists the character's purchased bank tabs, and `Items.BankBags()` every container of the bank: the tabs, or on a bank of the older kind its own slots and its bags.
+`Items.Bags()` lists the player's containers: bags 0 to `NUM_BAG_SLOTS`, plus the reagent bag and the keyring where the client has them. `Items.FreeSlots(bag)` gives the room left in a bag and its family (what kind of bag it is). `Items.Room()` adds up the room for any item in the ordinary bags and lists the special ones (a quiver, a soul bag) on their own; TopBar's and MenuBar's bag words use it. `Items.BankTabs()` lists the character's purchased bank tabs, and `Items.BankBags()` every container of the bank: the tabs, or on a bank of the older kind its own slots and its bags.
 
 `Items.Slot(bag, slot)` reads one slot through `C_Container.GetContainerItemInfo` (or the old global) and returns a plain table with `bag`, `slot`, `link`, `id`, `icon`, `count`, `quality`, `locked`, `quest` and `noValue`, or nil for an empty slot. Every value goes through `Clean`, so a secret comes back as nil rather than raising an error later.
 
@@ -25,7 +25,7 @@ The bags, bank and merchant are Serene's own windows. The game's windows still e
 
 `Items.Section(entry)` decides the section. A pin the player set (`bagPins[itemID]`) wins as long as the section still exists, either built-in or one of the player's own in `bagCats`. Without a valid pin, `AutoSection` decides: quest items go to Quest (so a grey quest item is never junk), quality 0 goes to Junk, bags and quivers to Other, anything equippable to Equipment, and the rest by item class. `Items.IsJunk(entry)` is simply `Section(entry) == "Junk"`, which gives the one rule both windows use: what you see under Junk is what gets sold, and nothing else.
 
-`Items.SellPrice(item)` returns what a vendor pays for one (0 if nothing), and `Items.Coins(copper, red)` formats money with the game's coin icons, in a quiet red for an amount you can't pay.
+`Items.SellPrice(item)` returns what a vendor pays for one (0 if nothing), and `Items.Coins(copper, red, short)` formats money with the game's coin icons, in a quiet red for an amount you can't pay. The short form is for a word on a band (TopBar's money): the gold with its silver once there is gold, else silver and copper; the game has no short form, so it is built here.
 
 ## Inventory.lua
 
@@ -71,13 +71,7 @@ On this client the item buttons are protected. Whether they are is read from the
 
 ### Sections and the menu
 
-Alt-right-click on an item opens Serene's own small menu (`Menu`, not UIDropDownMenu): the player's sections, the built-in ones, "A section of your own..." (which adds the name to `bagCats`), "Back to its own section" and "Never suggest deleting" (`bagKeep`). Picking a section writes `bagPins[itemID]`. Right-clicking the header of one of the player's own sections offers "Remove this section", which calls `RemoveSection` and drops every pin pointing at it.
-
-### Make room
-
-"make room" suggests the stack a vendor pays least for, in a small glass panel above the bags (`MakeRoom`, `Suggest`, `Cheapest`). It skips anything a vendor won't buy, quest items, locked items, the keyring and kept items. Delete, skip (for this opening only) or keep are the choices. It opens by itself when the bags open completely full (`BagsFull`, counting only bags that take any item).
-
-`Delete` is careful because it destroys an item: it reads the slot again and gives up if the link, count or lock changed since the suggestion, picks the item up and checks that the cursor holds that item, calls `DeleteCursorItem`, and checks the cursor is empty afterwards.
+Alt-right-click on an item opens Serene's own small menu (`ns.BagMenu` in BagMenu.lua, not UIDropDownMenu; it also lists whose bags or bank to look at): the player's sections, the built-in ones, "A section of your own..." (which adds the name to `bagCats`), "Back to its own section" and "Never suggest deleting" (`bagKeep`). Picking a section writes `bagPins[itemID]`. Right-clicking the header of one of the player's own sections offers "Remove this section", which calls `RemoveSection` and drops every pin pointing at it.
 
 ### Settings
 
@@ -91,6 +85,12 @@ The row under each window's header is drawn here: `ns.BagSlotsRow(win, live)` fo
 
 
 The row of bag slots lets the player put on, swap and take off bags (`PutOn` uses `PutItemInBag` and `PickupBagFromSlot`); hovering a slot highlights that bag's items with `Spotlight`. The bank comes in two kinds. An older bank has its own slots plus bag slots to buy (`BankBagSlots`). This client's bank is tabbed: `Items.BankTabs` reads the purchased tabs from `C_Bank.FetchPurchasedBankTabData`, and each tab holds a bag in an inventory slot that `C_Bank.BankBagTypeAndIDToInvSlot` names. It isn't known whether that call wants the tab's index or its id, so `TabInv` tries both; `/serene debug` prints both. Buying a tab or a bag slot never calls the purchase directly: the "buy" word calls the bank window's `Reveal` (in Bags.lua), which sets `revealing`, puts the game's `BankFrame` back under `UIParent` and hides Serene's bank, so the purchase happens on the game's own page with its own confirmation. `BANKFRAME_CLOSED` puts the frame away again.
+
+## BagRoom.lua: make room
+
+"make room" suggests the stack a vendor pays least for, in a small glass panel above the bags (`MakeRoom`, `Suggest`, `Cheapest`). Bags.lua drives it through `ns.BagRoom`: the word calls `Toggle`, each refresh calls `Suggest(win, live)`, opening the bags calls `OpenIfFull`, and the cell of `Suggested()` glows. It draws with the bags' own words and measures from `ns.bags`, so its words drag the bags and ignore the click at the end of a drag like theirs. It skips anything a vendor won't buy, quest items, locked items, the keyring and kept items. Delete, skip (for this opening only) or keep are the choices. It opens by itself when the bags open completely full (`BagsFull`, counting only bags that take any item).
+
+`Delete` is careful because it destroys an item: it reads the slot again and gives up if the link, count or lock changed since the suggestion, picks the item up and checks that the cursor holds that item, calls `DeleteCursorItem`, and checks the cursor is empty afterwards.
 
 ## Vendor.lua: the merchant window
 

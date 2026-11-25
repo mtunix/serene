@@ -14,9 +14,12 @@ pip install --target ~/.cache/serene-tools/py lupa luaparser
 python3 tools/check.py             # every .lua file; exits with 1 on a problem
 python3 tools/check.py Auras.lua   # one file
 python3 tools/check.py --list      # each file's globals, to read through
+python3 tools/check.py --calls     # the game's functions called by name, how often and where
 ```
 
 `check.py` parses every file and walks it with Lua's scoping rules, so it knows which names are locals at each point. It reports parse errors, any global a file reads that isn't listed in `tools/globals.txt` (usually a typo), a local read above the line that declares it or outside the block it was declared in (it would be nil there), and any assignment that creates a global by accident, which almost always means a missing `local`. Only the names under `# Serene writes` in `globals.txt` may be assigned.
+
+It holds the files to the rule that a game function which might not exist on this client is called through `pcall` or `Safe`: a game function called by name is reported unless the call is guarded (`X and X(...)`) or `globals.txt` lists the function under `# The game's functions called by name`, those always there (`CreateFrame`, `GetTime`, `InCombatLockdown`, `C_Timer`...). Add one there only when it exists on every client this runs on.
 
 It also reports what is left over: a local function no one calls, a local no one reads (a parameter or loop variable may go unread; a local meant to be unread is named `_`), and, on a run over every file, an `ns.X` that is set but read nowhere, neither in the addon nor anywhere under `tools/test`. An export that exists only for the tests is read by a spec, so it counts as used. A full run also reports a name in `globals.txt` that no file uses any more, outside its section of Lua's own names: take it out once the code that used it is gone.
 
@@ -33,7 +36,7 @@ python3 tools/test/run.py -v          # also list the globals the addon read tha
 
 The runner uses `lupa` to run the addon under Lua 5.1, the version the game uses. Each test gets a fresh Lua state with a fresh copy of the stub and the addon, so tests can't affect each other; a spec's top-level code (loading the addon, filling in items) runs again before every test.
 
-`tools/test/wow.lua` is the stub. Its frames keep their state (size, points, shown, alpha, text, scripts) and report it back, but nothing is drawn and the layout is crude. Around the frames it provides events (`wow.fire`), a fight (`wow.fight`, whose `PLAYER_REGEN_DISABLED` comes just before the lockdown, as in game), time and timers (`wow.advance`), the mouse (`wow.hover`), bags, items, spells, auras and the merchant as plain tables a test fills in (`wow.bags`, `wow.items`...), chat filters with `wow.say`, and slash commands with `wow.slash`. `wow.load()` loads the addon's files in TOC order into one namespace and `wow.login(saved)` runs `ADDON_LOADED` and `PLAYER_LOGIN`. A global the stub doesn't define reads as nil, as it would on a client without it. A frame's unknown key reads as nil too, unless it starts with a verb and a capital (`CancelButton`): then it reads as a method, so a part with such a key has to be made in the stub or the spec.
+`tools/test/wow.lua` is the stub. Its frames keep their state (size, points, shown, alpha, text, scripts) and report it back, but nothing is drawn and the layout is crude. Around the frames it provides events (`wow.fire`), a fight (`wow.fight`, whose `PLAYER_REGEN_DISABLED` comes just before the lockdown, as in game), time and timers (`wow.advance`), the mouse (`wow.hover`), bags, items, spells, auras and the merchant as plain tables a test fills in (`wow.bags`, `wow.items`...), chat filters with `wow.say`, and slash commands with `wow.slash`. `wow.load()` loads the addon's files in TOC order into one namespace and `wow.login(saved)` runs `ADDON_LOADED` and `PLAYER_LOGIN`. A global the stub doesn't define reads as nil, as it would on a client without it. A frame's unknown key reads as nil too, unless it starts with a verb and a capital (`CancelButton`): then it reads as a method, so a part with such a key has to be made in the stub or the spec. Indexing it then fails with an error that says so.
 
 Secret values are imitated too. `wow.secret(v)` makes one: arithmetic, ordering comparisons, indexing, calling and `#` on it raise an error, concatenating gives another secret, `type()` reports the hidden type and `issecretvalue()` is true. `wow.secretFight(true)` starts a fight in which the calls the client hides behave as they do in game: the player's aura queries return nothing, other units' auras, health, power and cast info come back secret, and so do cooldowns, usability and range. What the stub can't imitate is an error on `==` or on a truth test (`if secret then`), because plain Lua won't allow it; those mistakes still only show in game.
 
@@ -46,12 +49,13 @@ The specs:
 | `smoke.lua` | The whole addon: login, every module's refresh, every switch and setting, a fight, the debug commands, the mouse over every Serene frame, a long list of game events |
 | `secrets.lua` | Fights with secret values, in several looks and settings |
 | `settings.lua` | Settings agree across files: what files read is declared, every default and every `ns.STATE` key is used, no setting doubles as saved state, the panel and `/serene` touch real settings, the migrations and the dropping of old keys |
-| `chat*.lua`, `items.lua`, `bags.lua`, `vendor.lua`, `tooltip.lua` | The logic of chat and loot lines, item sections, the bags and their rows of slots and tabs, the merchant and full stacks (Merchant.lua), and the tooltips |
+| `chat*.lua`, `items.lua`, `bags.lua`, `vendor.lua`, `tooltip.lua` | The logic of chat and loot lines, item sections, the bags with their rows of slots and tabs, make room and the menu, the merchant and full stacks (Merchant.lua), and the tooltips |
 | `actions*.lua`, `bars_*.lua`, `fade.lua`, `modes.lua`, `hints.lua` | The action button model, the bar modules, fading, rest mode, hints |
 | `swing.lua`, `aura_frame.lua` | The swing timer's lines through swings and speed changes; Serene's buff frame: its groups and filters, short buffs learned, the missing buffs' place beside the top row |
-| `cast_bar.lua`, `units.lua` | Your cast bar's look, colours, sizes and words; a target card as Units dresses it, with its cast bar in its row and the overheal mark |
-| `top_bar.lua` | The money kept per character and the gold tooltip |
+| `cast_bar.lua`, `units.lua` | Your cast bar's look, colours, sizes and words; a target card as Units dresses it: its colours, art away, portrait side and fill direction, PvP crest, mirrored heal prediction, the target of target held until a fight ends, its cast bar in its row and the overheal mark |
+| `top_bar.lua` | The money kept per character and the gold tooltip; the room in your bags on the band and on the menu band |
 | `client_rules.lua` | Rules of this client checked in the source, such as no `"TRILINEAR"` texture filter |
+| `stub.lua` | The stub's own rules, where a spec could trip over them |
 | `captured.lua` | Chat lines and tooltips recorded from the real client (below), and `Capture.lua` itself |
 
 When a test fails because the stub is too simple, improve the stub, or stub the missing piece at the top of the spec. When it fails because of the addon, fix the addon. A test's expectation should never be changed to match a bug. While working, run only the specs for the area you touched; run the whole suite and `check.py` once at the end.

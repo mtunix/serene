@@ -32,7 +32,7 @@ At the start of any task touching code:
    | Tooltip, Toasts | [docs/tooltips-toasts.md](docs/tooltips-toasts.md) |
    | Units, UnitHeals, CastBar, Swing, Regen, Experience | [docs/units.md](docs/units.md) |
    | Auras, AuraFrame, UnitAuras | [docs/auras.md](docs/auras.md) |
-   | Items, Inventory, Bags, BagSlots, Vendor, Merchant | [docs/bags-merchant.md](docs/bags-merchant.md) |
+   | Items, Inventory, BagMenu, Bags, BagSlots, BagRoom, Vendor, Merchant | [docs/bags-merchant.md](docs/bags-merchant.md) |
    | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse | [docs/action-bars.md](docs/action-bars.md) |
    | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings | [docs/shell.md](docs/shell.md) |
    | A game API, a frame of the game's, what is secret, textures | [docs/forever-client.md](docs/forever-client.md) |
@@ -71,7 +71,8 @@ Run from the addon folder. Both tools need `lupa` and `luaparser`, kept outside 
 ```bash
 pip install --target ~/.cache/serene-tools/py lupa luaparser   # once
 
-python3 tools/check.py                    # parse errors, unknown globals, locals used early, accidental globals, dead code
+python3 tools/check.py                    # parse errors, unknown globals, locals used early, accidental globals, dead code,
+                                          # game calls without pcall
 python3 tools/test/run.py                 # every spec
 python3 tools/test/run.py loot bags       # specs whose file name has one of these words
 python3 tools/test/run.py -k roll         # tests whose name has this
@@ -114,6 +115,7 @@ Serene's comments are part of its record of what was learnt. Follow the house st
 
 - **Function names are short English verbs:** `Dress`, `Place`, `Silence`, `Tuck`, `Paint`, `Layout`.
 - **pcall around every game call** that might not exist on this client, and around every event registration.
+  `tools/check.py` reports a game function called by name unless `globals.txt` lists it as always there.
 - **Secret values:** in a fight the client hides some values. Read through `ns.Clean`/`ns.Safe`; never compare,
   do arithmetic on, or index a value that may be secret. "Unknown" is never a fact: don't dim, glow or count on nil.
 - **Locals before use.** A local used above its definition is nil at call time; `tools/check.py` reports it.

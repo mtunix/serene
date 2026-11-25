@@ -6,13 +6,16 @@ local Safe, Clean = ns.Safe, ns.Clean
 --   ns.Items.Bags(), NumSlots(bag)    your bags' ids (with the reagent bag and the keyring, where the game has them)
 --   BankBags(), BankTabs()            the bank's containers (its tabs, or its own slots and bags); its tabs
 --   FreeSlots(bag)                    the room left in a bag, and its family (what kind of bag it is)
+--   Room()                            your bags' room for any item: free, total; and each special bag's own
 --   Slot(bag, slot)                   what is in a slot: { bag, slot, link, id, icon, count, quality, locked,
 --                                     quest, noValue }, or nil
 --   Describe(entry)                   its class, equip slot, name, whether its stacks merge
 --   Section(entry)                    the bags' section it is shown in ("Junk", "Quest", one of your own...)
 --   IsJunk(entry)                     shown in Junk: what the merchant's window sells as junk. One rule for both,
 --                                     so what you see under Junk is what is sold, and only that.
---   IdOf(link), SellPrice(item), Coins(copper, red)
+--   IdOf(link), SellPrice(item)
+--   Coins(copper, red, short)         money with the game's coin icons (red: what you can't pay; short: a word on a
+--                                     band, the gold alone once there is gold, with its silver)
 
 local Items = {}
 ns.Items = Items
@@ -55,6 +58,24 @@ end
 function Items.FreeSlots(bag)
 	local free, family = Safe(Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots, bag)
 	return Clean(free) or 0, Clean(family) or 0
+end
+
+-- Your bags' room: free and total slots in the ordinary bags (room for any item), and the special bags (a quiver, a
+-- soul bag...) each on its own: { bag, free, total }.
+function Items.Room()
+	local free, total, special = 0, 0, {}
+	for bag = 0, (NUM_BAG_SLOTS or 4) do
+		local slots = Items.NumSlots(bag)
+		if slots > 0 then
+			local open, family = Items.FreeSlots(bag)
+			if family == 0 then
+				free, total = free + open, total + slots
+			else
+				special[#special + 1] = { bag = bag, free = open, total = slots }
+			end
+		end
+	end
+	return free, total, special
 end
 
 -- Your character's bank tabs: { id, name }, in order.
@@ -167,9 +188,21 @@ function Items.SellPrice(item)
 end
 
 -- An amount of copper with the game's coin icons. red: in a quiet red (what you can't pay).
-function Items.Coins(copper, red)
+-- (short: its own icons, a little lower, like the band's words; the game's string has no short form)
+local COIN = "|TInterface\\MoneyFrame\\UI-%sIcon:0:0:1:0|t"
+local function Short(copper)
+	local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+	local parts = {}
+	if g > 0 then parts[#parts + 1] = (BreakUpLargeNumbers and BreakUpLargeNumbers(g) or g) .. COIN:format("Gold") end
+	if s > 0 then parts[#parts + 1] = s .. COIN:format("Silver") end
+	if g == 0 and (c > 0 or #parts == 0) then parts[#parts + 1] = c .. COIN:format("Copper") end
+	return table.concat(parts, " ")
+end
+
+function Items.Coins(copper, red, short)
 	if type(copper) ~= "number" then return "" end
-	local text = Safe(GetCoinTextureString or (C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString), copper)
+	local text = short and Short(math.floor(math.abs(copper)))
+		or Safe(GetCoinTextureString or (C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString), copper)
 	text = text or ("%dc"):format(copper)
 	return red and (RED_TEXT .. text .. "|r") or text
 end

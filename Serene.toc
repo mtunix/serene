@@ -47,7 +47,9 @@ Tracker.lua
 Names.lua
 Merchant.lua
 Vendor.lua
+BagMenu.lua
 Bags.lua
 BagSlots.lua
+BagRoom.lua
 Modes.lua
 Settings.lua

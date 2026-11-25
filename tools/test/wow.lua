@@ -177,6 +177,14 @@ local function isVerb(key)
 	return false
 end
 
+-- (so a part whose key starts with a verb, frame.CancelButton, reads as a method: anything done with it then says so,
+-- rather than only "attempt to index a function value". Functions share one metatable in Lua 5.1: no function is
+-- ever meant to be indexed, so nothing else changes.)
+debug.setmetatable(function() end, { __index = function(_, key)
+	error(("a function indexed (.%s): a frame's part read as a method? A key starting with a verb and a capital is "
+		.. "one in the stub: make the part in the stub or the spec"):format(tostring(key)), 2)
+end })
+
 WidgetMeta.__index = function(self, key)
 	local method = Widget[key]
 	if method ~= nil then return method end
@@ -869,7 +877,8 @@ C_CVar = { GetCVar = GetCVar, SetCVar = SetCVar, GetCVarBool = GetCVarBool,
 
 -- The player and units ---------------------------------------------------------------------------------------------------
 
-wow.units = {} -- unit -> { name, level, class, classFile, exists, dead, health, healthMax, power, powerMax, ... }
+wow.units = {} -- unit -> { name, level, class, classFile, exists, dead, health, healthMax, power, powerMax, enemy,
+-- reaction (1 to 8; else 2 for an enemy, 5 otherwise), tapped, ... }
 local function U(unit)
 	if unit == "player" then return wow.player end
 	return wow.units[unit]
@@ -895,12 +904,13 @@ function UnitIsGhost() return false end
 function UnitIsAFK(unit) local u = U(unit) return u and u.afk or false end
 function UnitIsDND() return false end
 function UnitIsConnected(unit) return U(unit) ~= nil end
-function UnitIsTapDenied() return false end
+function UnitIsTapDenied(unit) local u = U(unit) return u and u.tapped or false end
 function UnitIsEnemy(a, b) local u = U(b) return u and u.enemy or false end
 function UnitIsFriend(a, b) local u = U(b) return u and not u.enemy or false end
 function UnitCanAttack(a, b) local u = U(b) return u and u.enemy or false end
 function UnitCanAssist(a, b) local u = U(b) return u and not u.enemy or false end
-function UnitReaction(a, b) local u = U(b) if u then return u.enemy and 2 or 5 end end
+-- (how one unit and another stand: the one that isn't you says, either way round)
+function UnitReaction(a, b) local u = U(b == "player" and a or b) if u then return u.reaction or (u.enemy and 2 or 5) end end
 function UnitClassification(unit) local u = U(unit) return u and u.classification or "normal" end
 function UnitCreatureType() return "Humanoid" end
 function UnitAffectingCombat(unit) if unit == "player" then return wow.combat end local u = U(unit) return u and u.combat or false end
@@ -997,7 +1007,8 @@ function EditMacro() end
 function PickupMacro() end
 function PickupAction() end
 function PlaceAction() end
-function GetCursorInfo() return wow.cursor and unpack(wow.cursor) end
+-- (not "wow.cursor and unpack(...)": an and keeps only the first of unpack's values)
+function GetCursorInfo() if wow.cursor then return unpack(wow.cursor) end end
 function ClearCursor() wow.cursor = nil end
 function CursorHasItem() return wow.cursor ~= nil and wow.cursor[1] == "item" end
 function DeleteCursorItem() wow.cursor = nil end
@@ -1076,7 +1087,7 @@ C_Container = {
 	GetContainerNumFreeSlots = function(bag)
 		local b, free = wow.bags[bag], 0
 		for slot = 1, b and b.size or 0 do if not b[slot] then free = free + 1 end end
-		return free, 0
+		return free, b and b.family or 0 -- (family: a special bag's kind, 1 a quiver...)
 	end,
 	GetContainerItemInfo = function(bag, slot)
 		local s = bagSlot(bag, slot)

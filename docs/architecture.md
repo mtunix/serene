@@ -18,7 +18,7 @@ Most files start by copying the helpers they use into locals, e.g. `local Safe, 
 table.insert(ns.modules, { init = Init, refresh = Refresh })
 ```
 
-`Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register. Nor do `BagSlots.lua` and `UnitHeals.lua`, which Bags and Units drive.
+`Actions.lua` and `Items.lua` are the exception: they are libraries that other files call, with nothing to set up, so they don't register. Nor do `BagMenu.lua`, `BagSlots.lua`, `BagRoom.lua` and `UnitHeals.lua`, which Bags and Units drive.
 
 On `ADDON_LOADED`, Core lets go of every saved key that is neither a setting nor in `ns.STATE` (below), fills `SereneDB` from `ns.DEFAULTS` (the `Fill` function recurses into nested tables and never overwrites a value the player already has), runs a few migrations, and sets `ns.db = SereneDB`. The migrations either rewrite an old enum value to a valid one or flip a setting once, guarded by a flag such as `ungrouped` or `topHover` so they don't run again.
 
@@ -218,8 +218,10 @@ The other exports:
 | `ns.FormatMatch` | ChatLoot | Chat, ChatCard |
 | `ns.chat` | Chat | ChatLines, ChatShell (only exists if `chat` was on at login) |
 | `ns.PlaceBank` | Bags | Vendor |
-| `ns.bags` | Bags | BagSlots (the windows' measures and `Text`) |
+| `ns.bags` | Bags | BagSlots, BagRoom (the windows' measures, words and refresh) |
 | `ns.BagSlotsRow`, `ns.BankTabsRow`, `ns.BagSlotsHover`, `ns.BankTabsDebug` | BagSlots | Bags |
+| `ns.BagRoom` | BagRoom | Bags |
+| `ns.BagMenu`, `ns.BagMenuHide` | BagMenu | Bags |
 | `ns.PlaceMerchant` | Vendor | Bags |
 | `ns.MerchantBuyStack` | Merchant | Vendor |
 | `ns.CAST_WIDTH_GAME`, `ns.CAST_FONT_AUTO` | CastBar | Settings |

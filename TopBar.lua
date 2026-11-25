@@ -74,17 +74,8 @@ end
 
 -- Money ------------------------------------------------------------------------------------------------------------
 
-local COIN = "|TInterface\\MoneyFrame\\UI-%sIcon:0:0:1:0|t"
-local function Coins(copper, short)
-	copper = math.floor(math.abs(copper or 0))
-	local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
-	local parts = {}
-	if g > 0 then parts[#parts + 1] = (BreakUpLargeNumbers and BreakUpLargeNumbers(g) or g) .. COIN:format("Gold") end
-	if s > 0 or (g > 0 and not short) then parts[#parts + 1] = s .. COIN:format("Silver") end
-	if (c > 0 or #parts == 0) and not (short and g > 0) then parts[#parts + 1] = c .. COIN:format("Copper") end
-	return table.concat(parts, " ")
-end
-ns.TopCoins = Coins -- (tests)
+-- (the band's word short; the tooltip's amounts as everywhere else, the game's way)
+local function Coins(copper, short) return ns.Items.Coins(math.abs(copper or 0), false, short) end
 
 local session = { money = nil, xp = 0, started = GetTime() }
 
@@ -139,25 +130,8 @@ end
 
 -- Bags ---------------------------------------------------------------------------------------------------------------
 
-local function BagSpace()
-	local get = C_Container and C_Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots
-	local size = C_Container and C_Container.GetContainerNumSlots or _G.GetContainerNumSlots
-	local free, total, special = 0, 0, {}
-	for bag = 0, (NUM_BAG_SLOTS or 4) do
-		local slots = Clean(Safe(size, bag)) or 0
-		if slots > 0 then
-			local open, kind = Safe(get, bag)
-			open, kind = Clean(open) or 0, Clean(kind) or 0
-			-- (ordinary bags counted; quivers and soul bags listed on their own)
-			if kind == 0 then
-				free, total = free + open, total + slots
-			else
-				special[#special + 1] = { bag = bag, free = open, total = slots }
-			end
-		end
-	end
-	return free, total, special
-end
+-- (ordinary bags counted; quivers and soul bags listed on their own)
+local BagSpace = ns.Items.Room
 
 local function BagWords(free)
 	if free == 0 then return BAD end

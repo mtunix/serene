@@ -17,7 +17,7 @@ After that, read the page for the area you're working on:
 | [units.md](units.md) | Units, UnitHeals, CastBar, Swing, Regen, Experience |
 | [auras.md](auras.md) | Auras, AuraFrame, UnitAuras |
 | [action-bars.md](action-bars.md) | Actions, ActionBars, Hints, Ready, BarCooldowns, BarKeys, BarPages, Ranks, Reagents, BarPing, BarSets, BarSupplies, BarUse |
-| [bags-merchant.md](bags-merchant.md) | Items, Inventory, Bags, BagSlots, Vendor, Merchant |
+| [bags-merchant.md](bags-merchant.md) | Items, Inventory, BagMenu, Bags, BagSlots, BagRoom, Vendor, Merchant |
 | [shell.md](shell.md) | Fade, Modes, TopBar, MenuBar, Minimap, Tracker, Names, Settings |
 
 ## The look
@@ -91,8 +91,10 @@ Modules initialise in TOC order, which is the order of this table.
 | `Names.lua` | Hides or shows the names over heads with one key. |
 | `Merchant.lua` | Buys full stacks (Alt-click or the Stack button) and restyles the game's stack-split popup. |
 | `Vendor.lua` | Draws Serene's merchant window, sells junk and repairs at every merchant. |
-| `Bags.lua` | Draws Serene's bags and bank windows, shows your other characters' items, and offers "make room". |
+| `BagMenu.lua` | Draws the small menu the bags open: whose bags, an item's section. |
+| `Bags.lua` | Draws Serene's bags and bank windows and shows your other characters' items. |
 | `BagSlots.lua` | Draws the row of bag slots under the bags' header and the bank's tabs under the bank's. |
+| `BagRoom.lua` | Offers "make room": the cheapest stack in your bags, to delete. |
 | `Modes.lua` | Puts the interface into rest mode when you're idle or away. |
 | `Settings.lua` | Builds the settings panel: Serene's own controls on eight pages. |
 | `Bindings.xml` | Declares the key bindings for Peek, the tracker and names. |

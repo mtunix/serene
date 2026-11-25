@@ -7,6 +7,8 @@
 local function Card(name, unit)
 	local frame = _G[name]
 	frame.unit = unit
+	frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 250, -4)
+	frame:SetSize(200, 80)
 	frame.healthbar = CreateFrame("StatusBar", nil, frame)
 	frame.healthbar:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -30)
 	frame.healthbar:SetSize(120, 12)
@@ -32,10 +34,12 @@ function UnitGetDetailedHealPrediction() return true end
 
 local ns = wow.load()
 
-wow.units.target = { name = "Defias Thug", level = 12, exists = true, reaction = 2 }
+wow.units.target = { name = "Defias Thug", level = 12, exists = true, enemy = true, powerToken = "MANA" }
 wow.units.targettarget = { name = "Tester", exists = true, player = true }
 
 local CHANNELING = { 0.42, 0.68, 0.44 }
+local HOSTILE, NEUTRAL, FRIENDLY, GREY = { 0.78, 0.33, 0.3 }, { 0.86, 0.7, 0.36 }, { 0.42, 0.68, 0.44 },
+	{ 0.45, 0.45, 0.45 }
 
 local function Login(saved)
 	wow.login(saved or {})
@@ -138,5 +142,138 @@ test("in a fight, your heal's amount secret: while you cast, the game's answer i
 	wow.player.casting = nil
 	wow.advance(0.3)
 	no(Shows(), "not casting: none of yours")
+	clean()
+end)
+
+-- The card ---------------------------------------------------------------------------------------------------------------
+
+-- The colour Serene last gave a bar.
+local function Colour(bar)
+	local calls = wow.calls(bar, "SetStatusBarColor")
+	local last = calls[#calls]
+	return last and { last[2], last[3], last[4] }
+end
+
+-- (the target's portrait, where the game draws it: beyond the bars' right end)
+local function Portrait()
+	local portrait = TargetFrame:CreateTexture()
+	portrait:SetPoint("TOPLEFT", TargetFrame, "TOPLEFT", 150, -10)
+	portrait:SetSize(64, 64)
+	TargetFrame.portrait = portrait
+	return portrait
+end
+
+test("the health bar coloured by how the unit feels about you: hostile, neutral, friendly; grey once tapped or dead", function()
+	Login()
+	local health = TargetFrame.healthbar
+	eq(Colour(health), HOSTILE, "an enemy")
+	wow.units.target.enemy, wow.units.target.reaction = false, 4
+	wow.advance(0.3)
+	eq(Colour(health), NEUTRAL, "neutral")
+	wow.units.target.reaction = 6
+	wow.advance(0.3)
+	eq(Colour(health), FRIENDLY, "friendly")
+	wow.units.target.tapped = true
+	wow.units.target.reaction = 2
+	wow.advance(0.3)
+	eq(Colour(health), GREY, "tapped by someone else")
+	clean()
+end)
+
+test("a player's bar in their class's colour, a little quieter than the game's", function()
+	wow.units.target = { name = "Ally", exists = true, player = true, class = "Mage", classFile = "MAGE" }
+	Login()
+	local c = RAID_CLASS_COLORS.MAGE
+	local got = Colour(TargetFrame.healthbar)
+	for index, part in ipairs({ c.r, c.g, c.b }) do
+		ok(math.abs(got[index] - (part * 0.82 + 0.06)) < 0.001, "quieter")
+	end
+	clean()
+end)
+
+test("the power bar by its kind; the game's own colour and texture put back at once", function()
+	TargetFrame.manabar = CreateFrame("StatusBar", nil, TargetFrame)
+	TargetFrame.manabar:SetPoint("TOPLEFT", TargetFrame.healthbar, "BOTTOMLEFT", 0, -1)
+	TargetFrame.manabar:SetSize(120, 8)
+	Login()
+	eq(Colour(TargetFrame.manabar), { 0.33, 0.52, 0.86 }, "mana")
+	local health = TargetFrame.healthbar
+	health:SetStatusBarColor(0, 1, 0)
+	eq(Colour(health), HOSTILE, "the game's green painted over")
+	ok(TargetFrame.manabar:GetPoint(1), "the power bar placed under the health bar")
+	local _, relative = TargetFrame.manabar:GetPoint(1)
+	eq(relative, health)
+	clean()
+end)
+
+test("the game's art put away, and kept away when the game shows it again", function()
+	local art = TargetFrame:CreateTexture()
+	TargetFrame.FrameTexture = art
+	Login()
+	eq(art:GetAlpha(), 0, "away")
+	art:SetAlpha(1)
+	eq(art:GetAlpha(), 0, "shown again by the game: away again")
+	art:Show()
+	eq(art:GetAlpha(), 0, "and again")
+	clean()
+end)
+
+test("the portrait on the right: round, an even size, and the bars fill toward it; portraits off: as the game fills", function()
+	local portrait = Portrait()
+	Login()
+	local health = TargetFrame.healthbar
+	local calls = wow.calls(health, "SetReverseFill")
+	eq(calls[#calls] and calls[#calls][2], true, "reversed")
+	local w, h = portrait:GetSize()
+	eq(w, h, "square")
+	eq(w % 2, 0, "even")
+	eq(portrait:GetNumMaskTextures(), 1, "Serene's round mask")
+	ns.db.unitPortraits = false
+	ns.Refresh()
+	wow.advance(0.3)
+	calls = wow.calls(health, "SetReverseFill")
+	eq(calls[#calls][2], false, "portraits off: filling the game's way")
+	clean()
+end)
+
+test("the PvP crest pinned to the portrait's rim", function()
+	local portrait = Portrait()
+	local crest = TargetFrame:CreateTexture()
+	crest:SetPoint("TOPLEFT", TargetFrame, "TOPLEFT", 200, 0)
+	TargetFrame.PvpIcon = crest
+	Login()
+	local point, relative, relPoint, x, y = crest:GetPoint(1)
+	eq({ point, relative, relPoint }, { "CENTER", portrait, "CENTER" })
+	ok(x > 0 and y > 0 and math.abs(x - y) < 0.001, "up on its outer side, 45 degrees")
+	clean()
+end)
+
+test("heal prediction mirrored with a bar filling toward the portrait: hung from the fill's other edge", function()
+	Portrait()
+	local health = TargetFrame.healthbar
+	local segment = CreateFrame("Frame", nil, health)
+	segment.FillMask = segment:CreateMaskTexture()
+	segment.Fill = segment:CreateTexture()
+	function segment:UpdateFillPosition() end
+	health.MyHealPredictionBar = segment
+	Login()
+	local fill = health:GetStatusBarTexture()
+	segment:UpdateFillPosition(fill, nil, 0.25)
+	local point, relative, relPoint, x = segment.FillMask:GetPoint(1)
+	eq({ point, relative, relPoint }, { "TOPRIGHT", fill, "TOPLEFT" }, "from the fill's left edge")
+	eq(x, -120 * 0.25, "a quarter of the bar further left")
+	eq(segment.Fill:GetTexture(), "Interface\\Buttons\\WHITE8X8", "flat")
+	clean()
+end)
+
+test("the target's target moves only out of a fight: in one, placed once it is over", function()
+	wow.combat = true
+	Login()
+	local _, relative = TargetFrameToT:GetPoint(1)
+	no(relative == TargetFrame, "not moved in the fight")
+	wow.fight(false)
+	wow.advance(0.5)
+	_, relative = TargetFrameToT:GetPoint(1)
+	eq(relative, TargetFrame, "placed from the target's frame once it is over")
 	clean()
 end)

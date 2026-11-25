@@ -1,5 +1,5 @@
 -- Tooltip.lua: the vendor price row, quiet colours, addons' lines waiting for Shift, calm tooltips in a fight.
--- TopBar.lua's coins (ns.TopCoins) at the end.
+-- Items.Coins' short form (TopBar's money) at the end.
 
 -- (the game's line callbacks: Forever's typed "Sell Price:" row is written over through these)
 local linePre, linePost = {}, {}
@@ -328,24 +328,21 @@ test("item comparison only with Shift: the game's setting off, given back when s
 	eq(wow.cvars.alwaysCompareItems, "1")
 end)
 
--- TopBar's coins -------------------------------------------------------------------------------------------------------
+-- Coins, short (a word on a band: TopBar's money) ------------------------------------------------------------------
 
 local function Coin(n, kind) return n .. "|TInterface\\MoneyFrame\\UI-" .. kind .. "Icon:0:0:1:0|t" end
-local COINS = {
-	{ 0, false, Coin(0, "Copper") },
-	{ 5, false, Coin(5, "Copper") },
-	{ 105, false, Coin(1, "Silver") .. " " .. Coin(5, "Copper") },
-	{ 100, false, Coin(1, "Silver") },
-	{ 10000, false, Coin(1, "Gold") .. " " .. Coin(0, "Silver") },
-	{ 123456, false, Coin(12, "Gold") .. " " .. Coin(34, "Silver") .. " " .. Coin(56, "Copper") },
-	{ 123456, true, Coin(12, "Gold") .. " " .. Coin(34, "Silver") },
-	{ 10000, true, Coin(1, "Gold") },
-	{ 105, true, Coin(1, "Silver") .. " " .. Coin(5, "Copper") },
-	{ -250, false, Coin(2, "Silver") .. " " .. Coin(50, "Copper") },
-	{ nil, false, Coin(0, "Copper") },
+local SHORT = {
+	{ 0, Coin(0, "Copper") },
+	{ 5, Coin(5, "Copper") },
+	{ 105, Coin(1, "Silver") .. " " .. Coin(5, "Copper") },
+	{ 100, Coin(1, "Silver") },
+	{ 10000, Coin(1, "Gold") },
+	{ 123456, Coin(12, "Gold") .. " " .. Coin(34, "Silver") },
+	{ -250, Coin(2, "Silver") .. " " .. Coin(50, "Copper") },
 }
-test("TopCoins: gold, silver and copper with their icons (short: no copper beside gold)", function()
-	for _, case in ipairs(COINS) do
-		eq(ns.TopCoins(case[1], case[2]), case[3], tostring(case[1]) .. (case[2] and " short" or ""))
+test("Items.Coins, short: the gold with its silver once there is gold, else silver and copper", function()
+	for _, case in ipairs(SHORT) do
+		eq(ns.Items.Coins(case[1], false, true), case[2], tostring(case[1]))
 	end
+	eq(ns.Items.Coins(nil, false, true), "", "nothing to say")
 end)
