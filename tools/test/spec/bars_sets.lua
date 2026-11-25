@@ -132,7 +132,7 @@ end)
 test("switched off for a while: the bars then are the copy, nothing taken as lost", function()
 	Start()
 	ns.db.barSets = false
-	ns.modules[#ns.modules].refresh()
+	ns.modules[#ns.modules].refresh() -- (BarSets: the last module loaded here)
 	Remove(1, 2, 3)
 	ns.db.barSets = true
 	ns.modules[#ns.modules].refresh()

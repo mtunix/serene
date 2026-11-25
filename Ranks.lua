@@ -134,6 +134,7 @@ local function Show()
 	local button = Pill()
 	if not button then return end
 	local count = #Names()
+	-- (nothing can be put on the bars in a fight: the button waits for its end)
 	if manual and count > 0 and not InCombatLockdown() then
 		button.text:SetText(count == 1 and "A new rank: put it on your bars"
 			or ("New ranks for %d spells: put them on your bars"):format(count))
@@ -161,6 +162,7 @@ local function Look()
 	if not found then return end
 	highest = found
 	-- (a highest rank that changed since the last look: the old one waits on the bars for the new)
+	-- (a character's first look only learns what it has: nothing counts as new)
 	local firstLook = next(store.seen) == nil
 	for name, h in pairs(found) do
 		local old = store.seen[name]
@@ -191,6 +193,7 @@ end
 local function Queue()
 	if queued or not settled then return end
 	queued = true
+	-- (the spellbook's events come in bursts: one look after them)
 	C_Timer.After(0.5, Look)
 end
 
@@ -207,12 +210,14 @@ Upgrade = function()
 	end
 	local done, names = 0, {}
 	for _, w in ipairs(waiting) do
+		-- (only a slot still holding the old rank: it may have changed since the look)
 		if SpellOn(w.slot) == w.id then
 			if C_SpellBook and C_SpellBook.PickupSpellBookItem then
 				Safe(C_SpellBook.PickupSpellBookItem, w.book, Bank())
 			elseif C_Spell and C_Spell.PickupSpell then
 				Safe(C_Spell.PickupSpell, w.new)
 			end
+			-- (only a spell is put down: a failed pickup never drops something else on the bar)
 			if Clean(Safe(GetCursorInfo)) == "spell" then
 				if CAB and CAB.PutActionInSlot then Safe(CAB.PutActionInSlot, w.slot) else Safe(_G.PlaceAction, w.slot) end
 			end
@@ -255,7 +260,7 @@ local function Init()
 			return
 		end
 		if event == "PLAYER_REGEN_ENABLED" then
-			if not fightWaits then return Show() end
+			if not fightWaits then return Show() end -- (the button back, hidden for the fight)
 			fightWaits = false
 		end
 		Queue()

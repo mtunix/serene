@@ -3,11 +3,11 @@
     pip install --target ~/.cache/serene-tools/py lupa luaparser   # once
     python3 tools/check.py                 # every .lua file in the addon; exit 1 on a problem
     python3 tools/check.py Auras.lua       # some files
-    python3 tools/check.py --list          # each file's globals, as before (to read by eye)
+    python3 tools/check.py --list          # each file's globals (to read by eye)
 
 It follows Lua's scopes (a local is seen only after its `local` line, inside its block), so it catches:
   * a typo: `Clena(x)` reads a global no one defines;
-  * a local used above its definition: nil at call time (FightProbe was);
+  * a local used above its definition: nil at call time;
   * a forgotten `local`: an assignment that makes a global by accident.
 
 A global is known when it's in tools/globals.txt: Lua's own, the game's API and frames, Serene's own globals.
@@ -17,6 +17,7 @@ Writing a global is only allowed for the names under "# Serene writes" in that f
 import os, re, sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# (the packages live outside the addon: WoW scans everything under AddOns/)
 sys.path.insert(0, os.path.expanduser("~/.cache/serene-tools/py"))
 try:
     from luaparser import ast, astnodes
@@ -40,6 +41,7 @@ def load_allowed():
     return reads, writes
 
 
+# (luaparser 4.x keeps no line on most nodes: 0 then, and check() finds the line in the text)
 def line_of(node):
     for attr in ("line", "lineno"):
         value = getattr(node, attr, None)
@@ -105,6 +107,7 @@ class Scopes:
             self.reads.setdefault(node.id, line_of(node))
 
     def visit_Index(self, node):
+        # (in a.b the b is a key, not a name; only a[b] reads b)
         self.visit(node.value)
         if node.notation == astnodes.IndexNotation.SQUARE:
             self.visit(node.idx)
@@ -114,11 +117,13 @@ class Scopes:
         self.visit(node.args)
 
     def visit_Field(self, node):
+        # (likewise { key = v }: only { [key] = v } reads key)
         if getattr(node, "between_brackets", False):
             self.visit(node.key)
         self.visit(node.value)
 
     def visit_LocalAssign(self, node):
+        # (the values first: in `local x = x` the x on the right is still the outer one)
         self.visit(node.values)
         for target in node.targets:
             self.declare(target)
@@ -142,10 +147,12 @@ class Scopes:
         self.pop()
 
     def visit_LocalFunction(self, node):
+        # (declared before its body, so it can call itself; `local f = function` can't)
         self.declare(node.name)
         self.function(node.args, node.body)
 
     def visit_Function(self, node):
+        # (`function Name()` assigns a global; `function a.b()` only reads a)
         name = node.name
         if isinstance(name, astnodes.Name):
             if not self.known(name.id):
@@ -207,10 +214,12 @@ def check(path, allowed_reads, allowed_writes, listing):
     for name, line in sorted(walker.reads.items(), key=lambda kv: kv[1]):
         if name in allowed_reads or name == "...":
             continue
+        # (no line from the parser: the name's first use as a word, not after . or :; it may be in a comment, so roughly)
         line = line or find_line(text, r"(?<![\w.:])" + re.escape(name) + r"\b")
         local_at = walker.declared_anywhere.get(name)
         if local_at is not None:
             local_at = local_at or find_line(text, r"\blocal\s+(function\s+)?[\w,\s]*\b" + re.escape(name) + r"\b")
+        # (a local of that name exists somewhere: declared further down, or in a block already closed)
         if local_at and local_at > line:
             problems.append(f"line {line}: '{name}' is read here, but its local is declared only at line {local_at} "
                             "(nil at this point)")
@@ -229,6 +238,7 @@ def main(argv):
     listing = "--list" in argv
     paths = [a for a in argv if not a.startswith("--")]
     if not paths:
+        # (the addon's own files only: the tests' Lua under tools/ defines its own globals)
         paths = sorted(p for p in os.listdir(HERE) if p.endswith(".lua"))
     allowed_reads, allowed_writes = load_allowed()
     failed = False

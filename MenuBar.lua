@@ -7,8 +7,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- bar or to it (Fade.lua, "words").
 -- * Under the mouse a word brightens, its tooltip says its key; the one whose window is open is gold, over a fine
 --   gold line; one that wants you (a flash, something new) has a small gold dot.
--- * The game's own buttons stay where they are, out of sight and out of the mouse's way; each word presses its button (securely: in a fight too), so everything
---   opens exactly as the game opens it.
+-- * The game's own buttons stay where they are, out of sight and out of the mouse's way; each word presses its
+--   button (securely: in a fight too), so everything opens exactly as the game opens it.
 -- * The bag bar's slots: in the bags window ("bags" at its top). Moved with the top bar (Shift and drag it).
 --   /serene menu on|off    (a reload to switch)
 --   /serene debug menu
@@ -19,7 +19,7 @@ local GOLD = { 1, 0.82, 0.35 }
 local SOFT = ns.SOFT_RGB
 local MUTED = ns.MUTED_RGB
 local RED = { 0.95, 0.42, 0.38 }
-local HEIGHT, FADE, PAD, SIZE = 22, 36, 7, 11
+local HEIGHT, FADE, PAD, SIZE = 22, 36, 7, 11 -- the band's height, each fading end, a word's side room, the font
 local DARK, RULE = 0.7, 0.4
 local EVERY = 0.25 -- seconds between two looks at the buttons' states
 
@@ -73,6 +73,7 @@ local function Away(frame)
 	holding = true
 	pcall(frame.SetAlpha, frame, 0)
 	holding = false
+	-- (a protected button's mouse can't be switched in a fight)
 	if frame.EnableMouse and not InCombatLockdown() then pcall(frame.EnableMouse, frame, false) end
 	if away[frame] then return end
 	away[frame] = true
@@ -141,6 +142,7 @@ local function FreeSlots()
 	if not get then return nil end
 	local free = 0
 	for bag = 0, (_G.NUM_BAG_SLOTS or 4) do
+		-- (ordinary bags only: a quiver's or a soul bag's room isn't room for your things)
 		local count, family = get(bag)
 		count, family = Clean(count), Clean(family)
 		if type(count) == "number" and (family == 0 or family == nil) then free = free + count end
@@ -165,6 +167,7 @@ end
 local function Paint(word)
 	local game = word.game
 	local enabled = not game or Safe(game.IsEnabled, game) ~= false
+	-- (the game keeps a micro button pushed while its window is open)
 	local open = game and Safe(game.GetButtonState, game) == "PUSHED"
 	if word.bags then open = BagsOpen() end
 	local color = open and GOLD or (word.over and { 1, 1, 1 }) or SOFT
@@ -206,6 +209,7 @@ end
 local function MakeWord(index)
 	local word = CreateFrame("Button", "SereneMenuWord" .. index, band, "SecureActionButtonTemplate")
 	word:SetHeight(HEIGHT)
+	-- (both registered, acted on at the release only, whatever the game's key-down setting)
 	word:RegisterForClicks("AnyUp", "AnyDown")
 	word:SetAttribute("useOnKeyDown", false)
 	word:SetAttribute("type", "click")
@@ -288,6 +292,7 @@ local function Layout()
 			word:SetAttribute("type", "macro")
 			word:SetAttribute("macrotext", "/click SereneMenuBags")
 		end
+		-- (room for two digits: the band keeps its width as the count changes)
 		word.count:SetText(entry.bags and "00" or "")
 		local width = math.ceil(Clean(Safe(word.text.GetStringWidth, word.text)) or 40)
 		if entry.bags then width = width + 4 + math.ceil(Clean(Safe(word.count.GetStringWidth, word.count)) or 14) end
@@ -392,6 +397,7 @@ local function Init()
 		C_Timer.After(0, Layout)
 	end)
 	local manager = _G.EditModeManagerFrame
+	-- (Edit Mode closed: the game's buttons or the top bar may have moved)
 	if type(manager) == "table" and manager.HookScript then
 		manager:HookScript("OnHide", function() C_Timer.After(0, Layout) end)
 	end

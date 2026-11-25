@@ -13,6 +13,7 @@ def tga(path, width, alpha):
         for x in range(width):
             d = math.hypot(x + 0.5 - width / 2, y + 0.5 - width / 2)
             out += bytes((255, 255, 255, int(round(255 * max(0.0, min(1.0, alpha(d)))))))
+    # (an uncompressed 32-bit TGA, type 2: descriptor 40 is 8 alpha bits, rows from the top)
     hdr = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, width, width, 32, 40)
     open(path, 'wb').write(hdr + out)
 

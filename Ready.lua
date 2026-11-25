@@ -17,13 +17,13 @@ local Safe, Clean = ns.Safe, ns.Clean
 
 local CHECK_EVERY = 0.5    -- the safety look (a cooldown's end, a mana tick no event told of)
 local HOVER_EVERY = 0.1    -- the mouse over a bar
-local FADE_IN, FADE_OUT = 0.12, 0.35
+local FADE_IN, FADE_OUT = 0.12, 0.35 -- seconds: back quickly, away gently
 
 local Actions = ns.Actions
 local buttons = {}     -- the action buttons found
 local alphaNow = {}    -- button -> the opacity Serene gave it
 local alphaWant = {}   -- button -> the opacity it is going to
-local reasonOf = {}    -- button -> why it is faint ("cooldown", "power", "unusable", "range") or nil
+local reasonOf = {}    -- button -> why it is faint ("cooldown", "power", "unusable", "target", "range", "unused")
 local touched = false  -- Serene changed some button's opacity (given back at full once off)
 local dirty = true
 local driver

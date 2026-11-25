@@ -12,7 +12,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- end, what was earned said quietly above its name in gold, its points (when it has any) a quiet number at the right.
 -- Where the toasts appear: the game stacks every toast (recipes, achievements, loot won...) upward from one anchor
 -- of its own (AlertFrame). Placed, that anchor is moved and kept there; the toasts stack from it as before.
--- /serene toasts on|off (a reload to switch), /serene toasts move (a sample to drag), /serene toasts reset
+-- /serene toasts on|off (a reload to switch), /serene toasts move (a sample to drag), /serene toasts reset,
+-- /serene toasts test (a real recipe toast and a real achievement toast)
 
 local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local WIDTH, HEIGHT = 270, 40 -- the toast (the icon's round end included)
@@ -36,8 +37,8 @@ local dressed = {}   -- toast -> Serene's parts for it
 local attic          -- a hidden frame holding the game's art put away
 local original       -- the anchor's own place, before Serene moved it
 local seen = {}      -- toast -> how it was drawn when last up (/serene debug)
-local placing = false
-local mover
+local placing = false -- (Serene's own SetPoint on the anchor, not heard by its hook)
+local mover          -- the sample toast /serene toasts move shows
 
 local function IsTexture(region)
 	return type(region) == "table" and region.IsObjectType and Safe(region.IsObjectType, region, "Texture") == true
@@ -121,6 +122,7 @@ local function PutAway(frame, d, depth)
 		if IsTexture(region) and region ~= d.icon and not d.own[region] then pcall(region.SetParent, region, attic) end
 	end
 	for _, child in ipairs({ Safe(frame.GetChildren, frame) }) do
+		-- (a child that takes the mouse is the toast's click area: left where it is)
 		if child ~= d.card and not Clean(Safe(child.IsMouseEnabled, child)) then PutAway(child, d, depth + 1) end
 	end
 end
@@ -169,7 +171,7 @@ end
 local function Layout(frame, d)
 	pcall(frame.SetSize, frame, WIDTH, HEIGHT)
 	local level = Clean(Safe(frame.GetFrameLevel, frame)) or 1
-	pcall(d.card.SetFrameLevel, d.card, math.max(0, level - 1))
+	pcall(d.card.SetFrameLevel, d.card, math.max(0, level - 1)) -- (under the toast's own icon and words)
 	local px = ns.Pixel(frame)
 	d.card:ClearAllPoints()
 	d.card:SetPoint("TOPLEFT", frame, "TOPLEFT", ICON / 2, 0)
@@ -268,6 +270,7 @@ local function Layout(frame, d)
 		if Clean(Safe(name.IsTruncated, name)) then pcall(name.SetFontObject, name, "GameFontNormalSmall") end
 	end
 	PutAway(frame, d, 0) -- (again: art a toast only makes when shown)
+	-- (a snapshot for /serene debug: a toast is gone before a command can be typed)
 	if frame ~= mover and C_Timer and C_Timer.After then
 		C_Timer.After(0.5, function()
 			if Safe(frame.IsVisible, frame) then seen[frame] = Describe(frame, d) end
@@ -306,7 +309,7 @@ local function Dress(frame)
 			local l, s = Safe(d.icon.GetDrawLayer, d.icon)
 			layer, sublevel = Clean(l) or layer, Clean(s) or sublevel
 		end
-		d.ring = frame:CreateTexture(nil, layer, nil, math.max(-8, sublevel - 1))
+		d.ring = frame:CreateTexture(nil, layer, nil, math.max(-8, sublevel - 1)) -- (-8: the lowest sublevel there is)
 		d.ring:SetTexture(MEDIA .. "Ring")
 		Smooth(d.ring)
 		d.ring:SetVertexColor(ns.LINE[1], ns.LINE[2], ns.LINE[3], ns.LINE[4])
@@ -324,6 +327,7 @@ local function Dress(frame)
 			end
 		end
 		dressed[frame] = d
+		-- (pooled: the same frame comes back for a later toast, its parts set up anew by the game)
 		if frame.HookScript then
 			frame:HookScript("OnShow", function(self) if dressed[self] then pcall(Layout, self, dressed[self]) end end)
 		end
@@ -411,7 +415,7 @@ local function Mover()
 	mover.Name = mover:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	mover.Name:SetText("Where toasts appear")
 	mover.hint = mover:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	mover.hint:SetPoint("TOP", mover, "BOTTOM", ICON / 4, -6)
+	mover.hint:SetPoint("TOP", mover, "BOTTOM", ICON / 4, -6) -- (under the card, which begins at the icon's middle)
 	mover.hint:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 	mover.hint:SetText("Drag: move.  Right click: done.")
 	Dress(mover)
@@ -429,6 +433,7 @@ local function Mover()
 	mover:SetScript("OnDragStart", function(self) self:StartMoving() end)
 	mover:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
+		-- (its place kept in toastAt, not in the game's own layout cache)
 		if self.SetUserPlaced then pcall(self.SetUserPlaced, self, false) end
 		local cx, bottom = self:GetCenter(), self:GetBottom()
 		if cx and bottom then
@@ -465,7 +470,7 @@ function ns.ToastReset()
 end
 
 -- (an achievement you have earned: the latest the game lists, else the first earned found through its categories,
--- Forever's Legacy Challenges among them)
+-- Forever's Legacy Challenges among them; the latest list comes back empty on Forever)
 local function EarnedAchievement()
 	local latest = Clean(Safe(_G.GetLatestCompletedAchievements, true))
 	if type(latest) == "number" then return latest end
@@ -500,7 +505,7 @@ function ns.ToastTest()
 	end
 	-- (the game loads its achievements window before it shows one of their toasts: the toast borrows its code)
 	if not _G.AchievementFrame then Safe(_G.AchievementFrame_LoadUI) end
-	local ok, err = pcall(achievements.AddAlert, achievements, id, true)
+	local ok, err = pcall(achievements.AddAlert, achievements, id, true) -- (true: earned before)
 	local name = Clean(select(2, Safe(_G.GetAchievementInfo, id)))
 	if ok then
 		ns.Print(("toasts: sample achievement %s (%d)"):format(tostring(name or "?"), id))
@@ -547,6 +552,7 @@ end
 local function Init()
 	local anchor = Anchor()
 	if anchor then
+		-- (the game moves the anchor back now and then: placed again at once)
 		hooksecurefunc(anchor, "SetPoint", function()
 			if not placing and ns.db.toastAt then Place() end
 		end)

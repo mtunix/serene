@@ -17,13 +17,13 @@ local DIM = 0.55                 -- how dark the elapsed part turns
 local GOLD = { 1, 0.82, 0.35 }
 local SOFT, LINE = ns.SOFT_RGB, ns.LINE
 local EDGE = { 0, 0, 0, 0.85 }
-local TRIM = 0.08
+local TRIM = 0.08                -- the icon's baked-in edge trimmed away, on each side
 local SMALL, LARGE = 18, 23      -- others' auras, and your own debuffs
 local GAP = 4
 local PER_ROW = 8                -- (about as wide as the card)
 local LIFT = 7                   -- above the card's name
 local MOST_DEBUFFS, MOST_BUFFS = 16, 32 -- (as many as the game shows)
-local TINY = 0.01
+local TINY = 0.01                -- the game's holder shrunk to this (too small to catch the mouse)
 
 local UNITS = { target = "TargetFrame", focus = "FocusFrame" }
 local NAMES = { target = "SereneTargetAuras", focus = "SereneFocusAuras" }
@@ -191,6 +191,7 @@ local function Place(c, frame)
 		pcall(c.SetFlowLayoutAxis, c, AXIS.Horizontal)
 		pcall(c.SetFlowLayoutPadding, c, 0, 0, 0, 0)
 	end
+	-- (eight of the small icons: a row of your larger ones holds fewer)
 	pcall(c.SetFlowLayoutMaximumLineSize, c, PER_ROW * (Element("debuffs") + GAP))
 end
 
@@ -219,7 +220,7 @@ local function Container(unit)
 		"CustomAuraContainerTemplate, DisableUntrustedLayoutScriptsTemplate")
 	if not ok or not c then return nil, tostring(c) end
 	c.sereneOwn = true -- (Auras.lua leaves it alone: Serene's own icons)
-	pcall(c.SetFrameLevel, c, (frame:GetFrameLevel() or 0) + 8)
+	pcall(c.SetFrameLevel, c, (frame:GetFrameLevel() or 0) + 8) -- (above the card's own layers)
 	Place(c, frame)
 	local added, why = AddGroups(c)
 	if not added then
@@ -252,6 +253,7 @@ local function Silence(holder)
 	hooksecurefunc(holder, "SetScale", Again)
 end
 
+-- (the game's own aura holder under the card: its known path first, else the first holder found, never Serene's)
 local function GameHolder(frame)
 	local content = rawget(frame, "TargetFrameContent")
 	local contextual = type(content) == "table" and rawget(content, "TargetFrameContentContextual")

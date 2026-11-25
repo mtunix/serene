@@ -25,6 +25,7 @@ def source(path):
     return open(CACHE, encoding="utf-8").read()
 
 
+# (every word in capitals in the addon and the specs; those that name a sentence are kept)
 def names_used():
     words = set()
     folders = [ROOT, os.path.join(HERE, "spec")]

@@ -1,6 +1,6 @@
 -- Bags.lua: the sections (ns.BagsSections) and Serene's bags opening and closing with the game's.
 
--- (the stub's game bag windows start shown; the game's start closed, and its bag calls open and close them)
+-- (the game's bag windows start closed, and its bag calls open and close them)
 for _, name in ipairs({ "ContainerFrameCombinedBags" }) do _G[name]:Hide() end
 for index = 1, NUM_CONTAINER_FRAMES do _G["ContainerFrame" .. index]:Hide() end
 function OpenAllBags() ContainerFrameCombinedBags:Show() end

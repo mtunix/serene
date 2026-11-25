@@ -3,8 +3,9 @@ local Safe, Clean, Over = ns.Safe, ns.Clean, ns.Over
 
 -- The interface away when you don't need it.
 -- Each group fades out when calm and comes back softly when it is needed; hovering any of its parts brings the
--- whole group back. Only opacities change (allowed in a fight too): nothing is moved, nothing hidden, a faded
--- button still works. Edit Mode, or the key held (Key Bindings > AddOns > Serene), shows everything.
+-- whole group back. Only opacities change (allowed in a fight too): nothing is moved, nothing hidden but the
+-- minimap's map itself (below), a faded button still works. Edit Mode, or the key held (Key Bindings > AddOns >
+-- Serene), shows everything.
 --   bars     action bars: in a fight, with an enemy targeted, while casting, a spell or item on the cursor
 --   bar4/5   Action Bars 4 and 5: under the mouse only, each on its own
 --   unit     your portrait and your pet's: in a fight, hurt, healed or struck (a moment after), mana or energy
@@ -18,7 +19,8 @@ local Safe, Clean, Over = ns.Safe, ns.Clean, ns.Over
 --   menu     micro menu and bags: under the mouse
 --   top      Serene's top bar: always, away in fights, or under the mouse (/serene top always|calm|hover)
 --   words    the menu's words under the top bar (MenuBar.lua): only under the mouse, the top bar's or theirs
--- A button glowing with a hint (Hints.lua) shows itself alone, its bar staying away.
+-- A button glowing with a hint (Hints.lua) shows itself alone, its bar staying away (or, as set, its bar or every
+-- bar comes back with it: hintReveal).
 
 local CHECK_EVERY = 0.1
 local FRAMES_EVERY = 3 -- seconds between two looks at which frames exist
@@ -50,7 +52,7 @@ local function Glass()
 	glass = CreateFrame("Frame", nil, UIParent)
 	glass:SetPoint("CENTER", map, "CENTER")
 	glass:SetFrameStrata(map:GetFrameStrata() or "LOW")
-	glass:SetFrameLevel((map:GetFrameLevel() or 1) + 20)
+	glass:SetFrameLevel((map:GetFrameLevel() or 1) + 20) -- (over everything the compass hangs on the map)
 	glass:EnableMouse(false)
 	glass.disc = glass:CreateTexture(nil, "OVERLAY")
 	glass.disc:SetAllPoints()
@@ -140,7 +142,7 @@ local GROUPS = {
 -- opacity they would follow (shown with a target). Their parent's opacity is ignored, they are never left to it.
 local OWN = { bar4 = true, bar5 = true }
 
--- (debuffs follow the buffs' switch, the experience bar the menu's)
+-- (groups with no switch of their own: the group whose switch they follow)
 local SWITCH = { debuffs = "buffs", xp = "menu", bar4 = "bars", bar5 = "bars" }
 local ORDER = { "bars", "bar4", "bar5", "unit", "minimap", "buffs", "debuffs", "xp", "menu", "top", "words" }
 -- Groups wholly away at rest, whatever the rest opacity is.
@@ -166,6 +168,7 @@ end
 local function EnemyTargeted()
 	if not Clean(Safe(UnitExists, "target")) then return false end
 	local enemy = Safe(UnitCanAttack, "player", "target")
+	-- (a secret answer counts as an enemy: bars shown for nothing cost less than bars missing in a fight)
 	if ns.IsSecret(enemy) then return true end
 	return enemy and not Clean(Safe(UnitIsDead, "target")) and true or false
 end
@@ -273,6 +276,7 @@ end
 local freed = {} -- frame -> true once its parent's opacity is ignored
 local function Free(frames)
 	for _, frame in ipairs(frames) do
+		-- (the bars are protected frames: left alone in a fight, tried again at the next Collect)
 		if not freed[frame] and frame.SetIgnoreParentAlpha and not InCombatLockdown() then
 			if pcall(frame.SetIgnoreParentAlpha, frame, true) then freed[frame] = true end
 		end
@@ -331,6 +335,7 @@ local function Collect()
 	end
 end
 
+-- (the top band has its own switch; the words band follows menuBar alone, being only ever seen under the mouse)
 local function Wanted(group)
 	if group == "top" then return ns.On("fade") and ns.On("top") end
 	if group == "words" then return ns.On("menuBar") end
@@ -340,6 +345,7 @@ end
 SetAlphas = function(frames, alpha)
 	for _, frame in ipairs(frames) do
 		local now = Safe(frame.GetAlpha, frame)
+		-- (near enough already: not set again every frame)
 		if type(now) ~= "number" or math.abs(now - alpha) > 0.004 then
 			pcall(frame.SetAlpha, frame, alpha)
 			touched[frame] = true

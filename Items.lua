@@ -80,13 +80,13 @@ end
 -- An entry from the saved bags of another character has only link, count, quality and id: that is enough.
 function Items.Describe(entry)
 	local _, _, _, equipLoc, icon, classID, subclassID = Safe(Instant, entry.id or entry.link)
-	entry.classID, entry.subclassID = Clean(classID) or 15, Clean(subclassID) or 0
+	entry.classID, entry.subclassID = Clean(classID) or 15, Clean(subclassID) or 0 -- (unknown: miscellaneous)
 	entry.equipLoc = Clean(equipLoc) or ""
 	entry.icon = entry.icon or Clean(icon)
 	entry.name = type(entry.link) == "string" and entry.link:match("%[(.-)%]") or ""
 	if type(entry.quality) ~= "number" then
 		local get = (C_Item and C_Item.GetItemQualityByID)
-		entry.quality = get and Clean(Safe(get, entry.link)) or 1
+		entry.quality = get and Clean(Safe(get, entry.link)) or 1 -- (unknown: common, never junk by mistake)
 	end
 	local equips = entry.equipLoc ~= "" and not entry.equipLoc:find("NON_EQUIP")
 	local stack = C_Item and C_Item.GetItemMaxStackSizeByID and entry.id and Clean(Safe(C_Item.GetItemMaxStackSizeByID, entry.id))
@@ -98,7 +98,7 @@ end
 local function AutoSection(entry)
 	if entry.quest or entry.classID == 12 then return "Quest" end
 	if entry.quality == 0 then return "Junk" end
-	if entry.classID == 1 or entry.classID == 11 then return "Other" end
+	if entry.classID == 1 or entry.classID == 11 then return "Other" end -- (bags and quivers equip, but aren't gear)
 	if entry.equips then return "Equipment" end
 	return BY_CLASS[entry.classID] or "Other"
 end
@@ -131,7 +131,7 @@ end
 -- What a vendor pays for one (0: nothing). item: a link or an id.
 function Items.SellPrice(item)
 	if not item then return 0 end
-	local price = Clean(select(11, Safe(ItemInfo, item)))
+	local price = Clean(select(11, Safe(ItemInfo, item))) -- (nil, so 0, while the item isn't cached yet)
 	return type(price) == "number" and price or 0
 end
 

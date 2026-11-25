@@ -9,7 +9,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- off hand a little fainter, Auto Shot or a wand in gold (the last half second, where a hunter must stand still,
 -- tinted on the track). The swings come from the game itself (PLAYER_SWING: each swing and its length), a change
 -- of speed mid-swing (haste) keeps the part already done.
--- /serene swing on|off (off: the game's own look back), /serene shots on|off
+-- /serene swing on|off (off: the game's own look back), /serene shots on|off, /serene swingsize 50-300
 
 -- (at size 100%; the setting "swingSize" makes them thicker or thinner, the width stays Edit Mode's)
 local HEIGHTS = { main = 4, off = 3, ranged = 4 }
@@ -97,13 +97,14 @@ local function FromNames()
 	end
 	local list = #outer > 0 and outer or any
 	table.sort(list, function(a, b) return #a[2] < #b[2] or (#a[2] == #b[2] and a[2] < b[2]) end)
-	if #outer == 0 then list = { list[1] } end
+	if #outer == 0 then list = { list[1] } end -- (none held by the screen: only the likeliest, the shortest name)
 	local frames = {}
 	for _, entry in ipairs(list) do frames[#frames + 1] = entry[1] end
 	return frames, list[1] and list[1][2]
 end
 
 local function Find()
+	-- (asked every frame: kept once both hands are found, or any by name; else looked for again every few seconds)
 	if game and (foundBy ~= "Edit Mode" or #games >= 2) then return game end
 	local now = Now()
 	if now - lookedAt < RETRY then return game end
@@ -133,6 +134,7 @@ end
 local function PutAway(object)
 	if hiddenArt[object] == nil then hiddenArt[object] = Clean(Safe(object.GetAlpha, object)) or 1 end
 	local now = Clean(Safe(object.GetAlpha, object))
+	-- (put away every frame: set only when the game has changed it)
 	if now ~= 0 then pcall(object.SetAlpha, object, 0) end
 end
 
@@ -302,14 +304,14 @@ end
 -- How far each line is, nil when it isn't shown; `ready` while the swing waits (out of reach, say).
 local function Progress(hand, demo)
 	if hand == "ranged" and not ns.On("swingRanged") then return nil end
-	if hand == "off" and not timers.off and not select(2, Speeds()) then return nil end
+	if hand == "off" and not timers.off and not select(2, Speeds()) then return nil end -- (one weapon: no off hand)
 	local timer = timers[hand]
 	local active = hand == "ranged" and ranged or hand ~= "ranged" and melee
 	if timer and (active or Running(hand)) then
 		local p = (Now() - timer.start) / timer.speed
 		return math.min(1, math.max(0, p)), p >= 1
 	end
-	if active then return 1, true end
+	if active then return 1, true end -- (attacking, no swing heard yet: full and dim)
 	if demo then
 		if hand == "ranged" and not RangedSpeed() then return nil end
 		return hand == "off" and 0.4 or 0.65, false
@@ -345,6 +347,7 @@ local function Paint(elapsed)
 	end
 	if iconsStale then Icons() end
 	local demo = EditMode()
+	-- NOTE: should the frame's width be secret in a fight, the lines drop to the least width, not the last one read
 	local width = math.max(LEAST_WIDTH, Clean(Safe(game.GetWidth, game)) or 0)
 	local barWidth = width - dims.icon - dims.gap
 	local any = false
@@ -413,6 +416,7 @@ end
 
 local function OnEvent(_, event, a, b)
 	if event == "PLAYER_SWING" then
+		-- (a: the swing's length, b: its Enum.PlayerSwingType; cleaned first, as a secret can't be a key)
 		local hand = HAND_OF[Clean(b)]
 		if hand then Swing(hand, a) end
 	elseif event == "PLAYER_ENTER_COMBAT" then
@@ -448,8 +452,8 @@ local function Init()
 	end
 	events:SetScript("OnEvent", OnEvent)
 	-- (already attacking after a /reload)
-	melee = Clean(Safe(IsCurrentSpell, 6603)) and true or false
-	ranged = Clean(Safe(IsAutoRepeatSpell, 75)) and true or false
+	melee = Clean(Safe(IsCurrentSpell, 6603)) and true or false -- (6603: Attack)
+	ranged = Clean(Safe(IsAutoRepeatSpell, 75)) and true or false -- (75: Auto Shot)
 	Apply()
 end
 

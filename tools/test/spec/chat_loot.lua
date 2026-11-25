@@ -14,8 +14,8 @@ local function Window()
 	f.AddMessage = function(_, text, r, g, b)
 		table.insert(lines, 1, { message = text, timestamp = GetTime(), r = r, g = g, b = b })
 	end
-	f.RemoveMessagesByPredicate = function(_, keep)
-		for index = #lines, 1, -1 do if keep(lines[index]) then table.remove(lines, index) end end
+	f.RemoveMessagesByPredicate = function(_, drop)
+		for index = #lines, 1, -1 do if drop(lines[index]) then table.remove(lines, index) end end
 	end
 	f.MarkDisplayDirty = function() end
 	return f

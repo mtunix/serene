@@ -144,6 +144,7 @@ end
 local function Clear(slot)
 	if InCombatLockdown() then return ns.Print("bars: not in a fight") end
 	Mine(function()
+		-- (the cursor emptied first: a pickup while holding something would put that in the slot)
 		Safe(ClearCursor)
 		Safe(PickupAction, slot)
 		Safe(ClearCursor)
@@ -161,6 +162,7 @@ local function Swap(a, b)
 	if Clean(Safe(GetCursorInfo)) ~= nil then return ns.Print("bars: put down what you hold first") end
 	-- (the counts go with their actions)
 	store.slots[a], store.slots[b] = store.slots[b], store.slots[a]
+	-- (a's action into b hands back b's on the cursor, which then goes into a)
 	Mine(function()
 		Safe(PickupAction, a)
 		Put(b)
@@ -313,6 +315,7 @@ Fill = function()
 				row.chips[index] = chip
 			end
 			chip:Set(def[1], def[3])
+			-- (drawn again a moment later, once the bars have changed)
 			chip:SetScript("OnClick", function() def[2]() C_Timer.After(0.6, Fill) end)
 			chip:ClearAllPoints()
 			chip:SetPoint("RIGHT", row, "RIGHT", -x, 0)
@@ -425,6 +428,7 @@ local function Init()
 	events:SetScript("OnEvent", function(_, event, slot)
 		if event == "PLAYER_ENTERING_WORLD" then
 			if not settled then
+				-- (the bars read a few seconds in: before, a slot may only be one not loaded yet)
 				C_Timer.After(3, function()
 					settled = true
 					LookAll()
@@ -434,6 +438,7 @@ local function Init()
 			return
 		end
 		slot = Clean(slot)
+		-- (slot 0 means every slot: left to the review's own LookAll)
 		if settled and type(slot) == "number" and slot > 0 then
 			Look(slot)
 			if panel and panel:IsShown() then C_Timer.After(0.3, Fill) end

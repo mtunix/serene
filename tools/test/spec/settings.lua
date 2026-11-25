@@ -1,7 +1,7 @@
 -- Settings agree everywhere: what the files read is declared in Core.lua's DEFAULTS (or is a known piece of saved
--- state), every default is used, a setting is never also used as a table of saved state (the barUse bug), the
--- settings panel and /serene only touch real settings, and the migrations at login turn old saved values into
--- valid ones.
+-- state), every default is used, a setting is never also used as a table of saved state (barUse is a switch, so
+-- BarUse keeps its data under barUseBy), the settings panel and /serene only touch real settings, and the
+-- migrations at login turn old saved values into valid ones.
 
 local ns = wow.load()
 
@@ -274,7 +274,7 @@ test("logging in with your real saved settings (fixtures/saved_settings.lua)", f
 	wow.advance(2)
 	wow.fight(false)
 	wow.advance(2)
-	-- (every value the player chose survives login)
+	-- (every value the player chose survives login, but those a migration may rewrite)
 	for key, value in pairs(copy) do
 		if type(value) ~= "table" and key ~= "auraTime" and key ~= "unitBorder" and key ~= "hintReveal" then
 			eq(ns.db[key], value, "kept " .. key)

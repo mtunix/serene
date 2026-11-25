@@ -25,7 +25,7 @@ wow.cvars = { showSwingTimer = "1", countdownForCooldowns = "1", showTimestamps 
 wow.player = { name = "Tester", realm = "Testrealm", class = "Warrior", classFile = "WARRIOR", classID = 1, level = 60,
 	race = "Human", raceFile = "Human", sex = 2, guid = "Player-1-00000001", faction = "Alliance" }
 
-local realType = type
+local realType = type -- (the real one: the stub's own, below, answers for secrets)
 local unpack = unpack
 
 local function trace(message)
@@ -42,7 +42,7 @@ end
 
 -- Secret values ----------------------------------------------------------------------------------------------------
 
-local secrets = setmetatable({}, { __mode = "k" }) -- proxy -> { value }
+local secrets = setmetatable({}, { __mode = "k" }) -- proxy -> { value } (weak: a secret no one holds is forgotten)
 local secretMeta = {}
 
 local function secretError(what)
@@ -64,6 +64,7 @@ secretMeta.__len = secretError("get the length of")
 secretMeta.__concat = function(a, b) return wow.secret("") end
 secretMeta.__tostring = function() return "<secret>" end
 
+-- (userdata, not tables: Lua 5.1 honours __len only on userdata, and pairs or rawget can't look inside one)
 local template = newproxy(true)
 for key, value in pairs(secretMeta) do getmetatable(template)[key] = value end
 
@@ -82,7 +83,7 @@ _G.type = function(value)
 	if s then return realType(s.value) end
 	return realType(value)
 end
-local type = _G.type
+local type = _G.type -- (from here on the stub, too, sees the type a secret hides)
 -- (the game's tostring/tonumber pass a secret on as a secret)
 local realToString, realToNumber = tostring, tonumber
 _G.tostring = function(value) if secrets[value] then return wow.secret("") end return realToString(value) end
@@ -128,6 +129,7 @@ _G.wipe = function(t) for key in pairs(t) do t[key] = nil end return t end
 table.wipe = _G.wipe
 _G.floor, _G.ceil, _G.abs, _G.max, _G.min, _G.mod = math.floor, math.ceil, math.abs, math.max, math.min, math.fmod
 _G.date, _G.time = os.date, os.time
+-- (Lua 5.1 has no bit operators: band and bor done by halving)
 _G.bit = { band = function(a, b)
 	local r, bitv = 0, 1
 	while a > 0 and b > 0 do
@@ -161,6 +163,7 @@ local VERBS = { "Set", "Clear", "Enable", "Disable", "Register", "Unregister", "
 	"Pause", "Restart", "Finish", "Highlight", "Insert", "Toggle", "Click", "Update", "Apply", "Fit", "Layout",
 	"Mark", "Flash", "Cancel", "Get", "Is", "Has", "Can", "Should", "Does" }
 
+-- (the verb, then a capital: SetAlpha is a call, Settings is not)
 local function isVerb(key)
 	if type(key) ~= "string" then return false end
 	for _, verb in ipairs(VERBS) do
@@ -186,12 +189,14 @@ local nextId = 0
 local function New(kind, name, parent, templates)
 	nextId = nextId + 1
 	local w = setmetatable({}, WidgetMeta)
+	-- (the widget's state, kept apart from the fields the addon sets on it)
 	rawset(w, "_s", { kind = kind, name = name, parent = parent, shown = true, alpha = 1, scale = 1, width = 0,
 		height = 0, points = {}, scripts = {}, hooks = {}, children = {}, regions = {}, attributes = {},
 		level = parent and parent._s and (parent._s.level + 1) or 1, strata = "MEDIUM", text = nil, id = 0,
 		templates = templates or "", serial = nextId, mouse = false })
-	rawset(w, "_calls", {})
+	rawset(w, "_calls", {}) -- (the unknown verbs called on it: wow.calls)
 	if name then
+		-- ("$parent" in a name stands for the parent's name, as in the game's templates)
 		if parent and name:find("$parent", 1, true) then
 			name = name:gsub("%$parent", parent:GetName() or "")
 			w._s.name = name
@@ -206,6 +211,7 @@ wow.NewWidget = New
 local function S(w) return rawget(w, "_s") end
 
 function Widget:GetObjectType() return S(self).kind end
+-- (the game's widget kinds, roughly: everything is a Region; textures, font strings and animations aren't Frames)
 function Widget:IsObjectType(kind)
 	local mine = S(self).kind
 	if mine == kind then return true end
@@ -243,6 +249,7 @@ function Widget:IsProtected() return S(self).protected or false, S(self).protect
 function Widget:CanChangeProtectedState() return not wow.combat end
 
 -- shown / alpha / scale
+-- (OnShow and OnHide on this widget only: unlike the game, its children hear nothing when it changes)
 function Widget:Show()
 	local s = S(self)
 	if s.shown then return end
@@ -268,16 +275,18 @@ function Widget:IsVisible()
 	return true
 end
 function Widget:SetAlpha(alpha)
-	if secrets[alpha] then S(self).alpha = alpha return end
+	if secrets[alpha] then S(self).alpha = alpha return end -- (the game takes a secret and draws it)
 	assert(type(alpha) == "number", "SetAlpha: a number expected")
 	S(self).alpha = math.max(0, math.min(1, alpha))
 end
 function Widget:GetAlpha() return S(self).alpha end
 function Widget:GetEffectiveAlpha()
 	local alpha, w = 1, self
+	-- (a secret opacity counts as full: the stub can't multiply by it)
 	while w and S(w) do alpha = alpha * (type(S(w).alpha) == "number" and S(w).alpha or 1) w = S(w).parent end
 	return alpha
 end
+-- (the game reads the secret on its side; the stub peeks)
 function Widget:SetAlphaFromBoolean(value, a, b) S(self).alpha = wow.reveal(value) and (a or 1) or (b or 0) end
 function Widget:SetScale(scale) S(self).scale = scale end
 function Widget:GetScale() return S(self).scale end
@@ -303,6 +312,7 @@ function Widget:GetRect()
 	return left, bottom, S(self).width, S(self).height
 end
 function Widget:SetPoint(point, relativeTo, relativePoint, x, y)
+	-- (the game's short forms: SetPoint(point, x, y), SetPoint(point, frame, x, y), a frame by its name)
 	if type(relativeTo) == "number" then relativeTo, relativePoint, x, y = nil, point, relativeTo, relativePoint end
 	if type(relativeTo) == "string" then relativeTo = _G[relativeTo] end
 	if relativeTo == self then error("SetPoint: a region can't be anchored to itself", 2) end
@@ -318,6 +328,7 @@ function Widget:SetAllPoints(other)
 	self:ClearAllPoints()
 	self:SetPoint("TOPLEFT", other, "TOPLEFT")
 	self:SetPoint("BOTTOMRIGHT", other, "BOTTOMRIGHT")
+	-- (the size copied too: the crude layout doesn't follow points)
 	if other and S(other) then S(self).width, S(self).height = S(other).width, S(other).height end
 end
 function Widget:ClearAllPoints() S(self).points = {} end
@@ -369,6 +380,7 @@ function Widget:SetClampedToScreen(v) S(self).clamped = v end
 function Widget:IsUserPlaced() return false end
 
 -- scripts and events
+-- (a new script drops the hooks on the old one, as in the game)
 function Widget:SetScript(name, fn) S(self).scripts[name] = fn S(self).hooks[name] = nil end
 function Widget:GetScript(name) return S(self).scripts[name] end
 function Widget:HasScript(name) return true end
@@ -384,11 +396,12 @@ function Widget:_Fire(name, ...)
 	for _, hook in ipairs(s.hooks[name] or {}) do wow.call(where .. " (hook)", hook, self, ...) end
 end
 function Widget:RegisterEvent(event)
+	-- (an event this client lacks, listed by a test in wow.unknownEvents, errors as in game: why Serene pcalls these)
 	if wow.unknownEvents and wow.unknownEvents[event] then error("Attempt to register unknown event \"" .. event .. "\"", 2) end
 	eventFrames[self] = eventFrames[self] or {}
 	eventFrames[self][event] = true
 end
-function Widget:RegisterUnitEvent(event, ...) self:RegisterEvent(event) end
+function Widget:RegisterUnitEvent(event, ...) self:RegisterEvent(event) end -- (the units not kept: heard for every unit)
 function Widget:UnregisterEvent(event) if eventFrames[self] then eventFrames[self][event] = nil end end
 function Widget:UnregisterAllEvents() eventFrames[self] = nil allEvents[self] = nil end
 function Widget:RegisterAllEvents() allEvents[self] = true end
@@ -401,7 +414,7 @@ function Widget:SetFormattedText(format, ...) S(self).text = format:format(...) 
 function Widget:GetStringWidth()
 	local text = S(self).text
 	if secrets[text] then return wow.secret(60) end
-	return text and #tostring(text) * 6 or 0
+	return text and #tostring(text) * 6 or 0 -- (6 px a character)
 end
 function Widget:GetUnboundedStringWidth() return self:GetStringWidth() end
 function Widget:GetStringHeight() return 12 end
@@ -494,6 +507,7 @@ function Widget:GetFontString()
 	return s.fontString
 end
 function Widget:SetFontString(fs) S(self).fontString = fs end
+-- (a texture object is taken as it is; a path or file id makes the button's own texture show it)
 local function buttonTexture(key)
 	return function(self, texture)
 		local s = S(self)
@@ -559,6 +573,7 @@ function Widget:GetReverseFill() return false end
 function Widget:GetThumbTexture() return S(self).thumb end
 function Widget:SetThumbTexture(t) S(self).thumb = type(t) == "table" and t or self:CreateTexture() end
 function Widget:SetCooldown(start, duration) S(self).cooldown = { start, duration } end
+-- (in milliseconds, as the game gives them)
 function Widget:GetCooldownTimes() local c = S(self).cooldown if c then return c[1] * 1000, c[2] * 1000 end return 0, 0 end
 function Widget:GetCooldownDuration() local c = S(self).cooldown return c and c[2] * 1000 or 0 end
 function Widget:Clear() S(self).cooldown = nil end
@@ -579,6 +594,7 @@ function Widget:GetProcessingTooltipInfo() local d = S(self).data if d then retu
 function Widget:GetOwner() return S(self).owner end
 function Widget:IsOwned(owner) return S(self).owner == owner end
 function Widget:GetAnchorType() return S(self).anchor or "ANCHOR_NONE" end
+-- (the game's tooltip lines are font strings named GameTooltipTextLeft1, ...Right1: made as needed, hidden)
 local function tooltipLine(self, index)
 	local name = S(self).name
 	if not name then return end
@@ -625,6 +641,7 @@ function Widget:AddMessage(text, r, g, b, ...)
 	local s = S(self)
 	s.messages = s.messages or {}
 	table.insert(s.messages, { text = text, r = r, g = g, b = b, extra = { ... } })
+	-- (a window with the game's history, as the chat windows below: the newest line first)
 	local history = rawget(self, "lines")
 	if history then table.insert(history, 1, { message = text, timestamp = wow.now, r = r, g = g, b = b }) end
 	table.insert(wow.printed, text)
@@ -657,6 +674,7 @@ end
 
 -- CreateFrame and the templates the addon asks for
 local TEMPLATE_PARTS = {
+	-- (the tooltip's first two lines exist from the start, empty and hidden)
 	GameTooltipTemplate = function(f)
 		S(f).lines = {}
 		for index = 1, 2 do f:AddLine("") end
@@ -692,6 +710,8 @@ end
 
 -- Fire a game event at every frame that registered it (in the order they were made).
 function wow.fire(event, ...)
+	-- (the list taken first: a frame that registers while the event runs doesn't hear it; one that unregisters,
+	-- checked again below, doesn't either)
 	local list = {}
 	for _, f in ipairs(frames) do
 		if (eventFrames[f] and eventFrames[f][event]) or allEvents[f] then list[#list + 1] = f end
@@ -712,6 +732,8 @@ function wow.advance(seconds, step)
 		local dt = math.min(step, left)
 		wow.now = wow.now + dt
 		left = left - dt
+		-- (due ones only, taken before any runs: a timer made while they run, After(0) too, waits for the next step,
+		-- as the next frame in the game; 1e-9 for the sums of steps that never quite add up)
 		local due = {}
 		for index = #timers, 1, -1 do
 			local t = timers[index]
@@ -721,6 +743,7 @@ function wow.advance(seconds, step)
 		for _, t in ipairs(due) do
 			if t.iterations then
 				t.left = t.left - 1
+				-- (a ticker runs at most once a step: one shorter than the step falls behind)
 				if t.left <= 0 then t.cancelled = true else t.at = t.at + t.interval end
 			else
 				t.cancelled = true
@@ -798,6 +821,7 @@ function hooksecurefunc(target, name, hook)
 		end
 		if type(original) ~= "function" then error("hooksecurefunc: no function " .. tostring(name), 2) end
 	end
+	-- (the wrapper set on that table only: on a frame, that frame's method, not every frame's)
 	rawset(target, name, function(...)
 		local results = { original(...) }
 		wow.call("hook " .. tostring(name), hook, ...)
@@ -811,6 +835,7 @@ SlashCmdList = {}
 function wow.slash(text)
 	local command, rest = text:match("^(/%S+)%s*(.-)$")
 	for key, fn in pairs(SlashCmdList) do
+		-- (the game's way: SlashCmdList.KEY answers the words in SLASH_KEY1, SLASH_KEY2...)
 		for index = 1, 9 do
 			local word = rawget(_G, "SLASH_" .. key .. index)
 			if word and word:lower() == command:lower() then return fn(rest) end
@@ -842,6 +867,7 @@ local function U(unit)
 	return wow.units[unit]
 end
 function UnitExists(unit) return U(unit) ~= nil end
+-- (the realm only for another realm's player, as the game gives it)
 function UnitName(unit) local u = U(unit) if u then return u.name, u.realm ~= wow.player.realm and u.realm or nil end end
 function UnitFullName(unit) local u = U(unit) if u then return u.name, u.realm end end
 function GetUnitName(unit, realm) return (UnitName(unit)) end
@@ -982,11 +1008,13 @@ INVSLOT_MAINHAND, INVSLOT_OFFHAND, INVSLOT_RANGED = 16, 17, 18
 
 function wow.link(id)
 	local item = wow.items[id]
+	-- (coloured by quality; the link's level, 60, in its ninth field)
 	local colors = { [0] = "ff9d9d9d", "ffffffff", "ff1eff00", "ff0070dd", "ffa335ee", "ffff8000" }
 	return ("|c%s|Hitem:%d::::::::60:::::|h[%s]|h|r"):format(colors[item and item.quality or 1] or "ffffffff", id,
 		item and item.name or ("Item " .. id))
 end
 
+-- (an item by its id, its link, or its name, as GetItemInfo takes them)
 local function idOf(item)
 	if type(item) == "number" then return item end
 	if type(item) == "string" then return tonumber(item:match("item:(%d+)")) or (function()
@@ -1064,7 +1092,7 @@ C_Container = {
 	SplitContainerItem = function() end,
 	SortBags = function() end,
 	GetSortBagsRightToLeft = function() return false end,
-	ContainerIDToInventoryID = function(bag) return 19 + bag end,
+	ContainerIDToInventoryID = function(bag) return 19 + bag end, -- (bags 1 to 4 sit in inventory slots 20 to 23)
 	GetItemCooldown = function() return 0, 0, 1 end,
 	IsContainerFiltered = function() return false end,
 	ShowContainerSellCursor = function() end,
@@ -1198,6 +1226,7 @@ C_UnitAuras = {
 
 -- Tooltip data (wow.tooltipData[kind .. ":" .. key] = { lines = { { leftText = , rightText = , leftColor = } } })
 wow.tooltipData = {}
+-- (a C_TooltipInfo getter answers wow.tooltipData["kind:arg"], or "kind:arg:arg2" with two arguments)
 local function data(kind) return function(a, b) return wow.tooltipData[kind .. ":" .. tostring(a) .. (b and (":" .. tostring(b)) or "")] end end
 C_TooltipInfo = { GetBagItem = data("bag"), GetMerchantItem = data("merchant"), GetUnit = data("unit"),
 	GetHyperlink = data("link"), GetItemByID = data("item"), GetSpellByID = data("spell"), GetAction = data("action"),
@@ -1260,6 +1289,7 @@ CHAT_FRAMES = {}
 NUM_CHAT_WINDOWS = 10
 MAX_BATTLEFIELD_QUEUES = 3
 
+-- (objects whose every method is a quiet no-op, through the widgets' verbs)
 function CreateUnitHealPredictionCalculator() return setmetatable({}, WidgetMeta) end
 C_CurveUtil = {
 	CreateCurve = function() local c = setmetatable({}, WidgetMeta) rawset(c, "_s", { points = {} }) rawset(c, "_calls", {}) return c end,
@@ -1287,6 +1317,7 @@ C_Texture = { GetAtlasInfo = function(atlas) return { width = 16, height = 16, f
 C_PlayerInteractionManager = { IsInteractingWithNpcOfType = function() return false end }
 C_Bank = { FetchPurchasedBankTabIDs = function() return {} end, FetchPurchasedBankTabData = function() return {} end,
 	CanUseBank = function() return false end, FetchViewableBankTypes = function() return {} end }
+-- (absent here, so the addon takes its fallbacks; a spec that needs one sets it before loading)
 C_SwingTimer = nil -- (Forever-only; its shape isn't known well enough to stub)
 C_Secrets = nil
 C_StringUtil = nil
@@ -1300,6 +1331,7 @@ GetBattlefieldTimeWaited = function() return 0 end
 GetLFGMode = function() return nil end
 GetLFGQueueStats = function() return nil end
 UnitFrameHealPredictionBars_Update = function() end
+-- (frames only, not their regions, in the order they were made)
 EnumerateFrames = function(after)
 	local index = 0
 	if after then for i, f in ipairs(frames) do if f == after then index = i break end end end
@@ -1323,6 +1355,7 @@ function EventRegistry:RegisterFrameEventAndCallback(event, fn, owner) self:Regi
 function EventRegistry:TriggerEvent(event, ...) self:_Trigger(event, ...) end
 function EventRegistry:_Trigger(event, ...)
 	for _, cb in ipairs(self.callbacks[event] or {}) do
+		-- (an owner is passed first, as the game's callback registry does)
 		if cb[2] ~= nil then wow.call("EventRegistry " .. event, cb[1], cb[2], ...) else wow.call("EventRegistry " .. event, cb[1], ...) end
 	end
 end
@@ -1344,12 +1377,13 @@ function wow.say(event, text, ...)
 	local args = { text, ... }
 	local frame = wow.chatFrame or ChatFrame1
 	for _, filter in ipairs(wow.chatFilters[event] or {}) do
+		-- (at least 13 arguments, as a chat event has: the missing ones nil)
 		local results = { pcall(filter, frame, event, unpack(args, 1, math.max(#args, 13))) }
 		if not results[1] then
 			table.insert(wow.errors, { where = "chat filter " .. event, message = tostring(results[2]) })
 			break
 		end
-		if results[2] then return nil, false end
+		if results[2] then return nil, false end -- (true: the line hidden; else what it returns replaces the arguments)
 		if results[3] ~= nil then for index = 3, #results do args[index - 2] = results[index] end end
 	end
 	frame:AddMessage(args[1], 1, 1, 1)
@@ -1442,6 +1476,7 @@ for _, family in ipairs({ { "ActionButton", 12 }, { "MultiBarBottomLeftButton", 
 		b.cooldown = CreateFrame("Cooldown", family[1] .. index .. "Cooldown", b)
 		b.NormalTexture = b:CreateTexture()
 		if family[1] ~= "PetActionButton" and family[1] ~= "StanceButton" then
+			-- (the slots each bar shows in the game: 1-12, bottom left 61-72, bottom right 49-60, right 25-36, left 37-48)
 			local page = ({ ActionButton = 0, MultiBarBottomLeftButton = 5, MultiBarBottomRightButton = 4,
 				MultiBarRightButton = 2, MultiBarLeftButton = 3 })[family[1]]
 			b.action = page * 12 + index
@@ -1470,7 +1505,7 @@ end
 
 -- A fight as this client has it: secret values -----------------------------------------------------------------------
 -- wow.secretFight(true) puts the player in a fight (with PLAYER_REGEN_DISABLED) and makes the calls the client hides
--- in a fight answer as it does (measured in game, see docs/forever-client.md and the memory notes):
+-- in a fight answer as it does (measured in game, see docs/forever-client.md):
 --   * the player's auras: GetAuraDataByIndex / GetUnitAuras / GetAuraSlots give nothing,
 --     GetAuraDataByAuraInstanceID errors, UNIT_AURA's updateInfo fields are secret;
 --   * other units' auras: every field secret;
@@ -1505,13 +1540,14 @@ local function forOthers(fn)
 end
 
 function wow.secretFight(on)
-	if on and #plain == 0 then
+	if on and #plain == 0 then -- (once: a second call doesn't wrap the wrappers)
 		local A = C_UnitAuras
 		local byIndex, byId, all = A.GetAuraDataByIndex, A.GetAuraDataByAuraInstanceID, A.GetUnitAuras
 		swap(A, "GetAuraDataByIndex", function(unit, ...)
 			if unit == "player" then return nil end
 			return secretFields(byIndex(unit, ...))
 		end)
+		-- (through the wrapped call above: nothing for the player, secrets for the others)
 		swap(A, "GetBuffDataByIndex", function(unit, index, filter) return A.GetAuraDataByIndex(unit, index, "HELPFUL" .. (filter or "")) end)
 		swap(A, "GetDebuffDataByIndex", function(unit, index, filter) return A.GetAuraDataByIndex(unit, index, "HARMFUL" .. (filter or "")) end)
 		swap(A, "GetAuraDataByAuraInstanceID", function(unit, id)
@@ -1539,6 +1575,7 @@ function wow.secretFight(on)
 		swap(C_Spell, "IsSpellUsable", function(...) return secretAll(usable(...)) end)
 		swap(C_Spell, "IsSpellInRange", function(...) return secretAll(range(...)) end)
 		wow.fight(true)
+		-- (the update a fight starts with: every field of its info secret)
 		wow.fire("UNIT_AURA", "player", { isFullUpdate = wow.secret(false), addedAuras = wow.secret({}),
 			removedAuraInstanceIDs = wow.secret({}), updatedAuraInstanceIDs = wow.secret({}) })
 	elseif not on then
@@ -1569,6 +1606,7 @@ function wow.load(files, opts)
 	opts = opts or {}
 	local ns = opts.ns or {}
 	files = files or wow.tocFiles()
+	-- (Core.lua first: it makes ns.modules and the helpers every file copies into locals at load)
 	if files[1] ~= "Core.lua" then table.insert(files, 1, "Core.lua") end
 	for _, file in ipairs(files) do
 		local chunk, problem = loadfile(wow.root .. "/" .. file)
@@ -1583,11 +1621,11 @@ end
 -- The game's login: saved variables loaded (SereneDB, or nil for a new player), ADDON_LOADED, PLAYER_LOGIN (every
 -- module's init), PLAYER_ENTERING_WORLD.
 function wow.login(saved)
-	SereneDB = saved
+	SereneDB = saved -- (the game sets saved variables just before ADDON_LOADED)
 	wow.fire("ADDON_LOADED", "Serene")
 	wow.loggedIn = true
 	wow.fire("PLAYER_LOGIN")
-	wow.fire("PLAYER_ENTERING_WORLD", true, false)
+	wow.fire("PLAYER_ENTERING_WORLD", true, false) -- (isInitialLogin, isReloadingUi)
 end
 
 -- Lines the addon printed in red (a module's init that failed, caught by Core.lua).
@@ -1600,6 +1638,7 @@ function wow.redLines()
 end
 
 -- Globals looked up that nothing defines (realistic: the game reads them as nil). Kept for the report.
+-- (set last, so the stub's own lookups while it builds itself aren't counted)
 setmetatable(_G, { __index = function(_, key)
 	if type(key) == "string" then wow.missing[key] = (wow.missing[key] or 0) + 1 end
 	return nil

@@ -99,7 +99,7 @@ local BAR_TYPES = { standard = CASTING, channel = CHANNELING, uninterruptable = 
 local dressed = {}   -- unit frame -> { health, power, glass, mark, art = {}, name }
 local away = {}      -- region -> true while put away
 local holding = false -- (Serene's own calls, not heard by its hooks)
-local hooked = {}
+local hooked = {}     -- region -> true once hooked (hooks can't be taken off: never twice)
 local active = false
 
 -- Finding the parts ------------------------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ local function PowerBar(frame)
 		or (frame.GetName and frame:GetName() and _G[frame:GetName() .. "ManaBar"])
 end
 
--- (the player's power bar, for the five-second rule's line under it: Regen.lua)
+-- (the player's power bar, for the five-second rule's line under it: Regen.lua; found with the cards off too)
 function ns.PlayerPowerBar()
 	local frame = _G.PlayerFrame
 	if type(frame) ~= "table" then return nil end
@@ -196,6 +196,7 @@ local function ClassColor(unit)
 	file = Clean(file)
 	if not file then return nil end
 	if classColors[file] then return classColors[file] end
+	-- (another addon's class colours, where one sets them)
 	local colors = _G.CUSTOM_CLASS_COLORS or _G.RAID_CLASS_COLORS
 	local c = colors and colors[file]
 	if not c then return nil end
@@ -210,7 +211,7 @@ local function HealthColor(unit)
 	if Clean(Safe(UnitIsPlayer, unit)) then return ClassColor(unit) or FRIENDLY end
 	if Clean(Safe(UnitIsTapDenied, unit)) then return GREY end
 	local reaction = Clean(Safe(UnitReaction, unit, "player"))
-	if type(reaction) == "number" then
+	if type(reaction) == "number" then -- (1 to 3 hostile, 4 neutral, 5 to 8 friendly)
 		if reaction <= 3 then return HOSTILE end
 		if reaction == 4 then return NEUTRAL end
 		return FRIENDLY
@@ -239,7 +240,7 @@ local function Unmask(bar)
 	local fill = Safe(bar.GetStatusBarTexture, bar)
 	if type(fill) ~= "table" or not fill.GetNumMaskTextures then return end
 	local count = Clean(Safe(fill.GetNumMaskTextures, fill)) or 0
-	for index = count, 1, -1 do
+	for index = count, 1, -1 do -- (from the end: taking one off moves the ones after it down)
 		local mask = Safe(fill.GetMaskTexture, fill, index)
 		if mask then pcall(fill.RemoveMaskTexture, fill, mask) end
 	end
@@ -255,6 +256,7 @@ local function HookFill(bar)
 	if type(fill) ~= "table" or hooked[fill] then return end
 	hooked[fill] = true
 	local function Again()
+		-- (a fill the bar has since replaced: its hooks stay, but it is no longer Serene's to paint)
 		if holding or not active or Safe(bar.GetStatusBarTexture, bar) ~= fill then return end
 		Paint(bar)
 	end
@@ -328,7 +330,7 @@ local function Round(d)
 		if mask and mask ~= d.mask then pcall(portrait.RemoveMaskTexture, portrait, mask) end
 	end
 	if d.mask == nil then
-		d.mask = false
+		d.mask = false -- (tried once: false where this client can't)
 		local parent = Safe(portrait.GetParent, portrait)
 		if parent and parent.CreateMaskTexture and portrait.AddMaskTexture then
 			local mask = parent:CreateMaskTexture()
@@ -463,7 +465,7 @@ local function Size(region, width, height)
 	holding = false
 end
 
--- The portrait for a card this tall (its name row and its bars).
+-- The portrait for a card this tall (its name row and its bars), an even size so its middle falls on a whole pixel.
 local function PortraitSize(content, e, lined, ringExtra)
 	if lined then return math.floor((content + 2 * e + ringExtra) / 2 + 0.5) * 2 end
 	return math.floor(content / 2 + 0.5) * 2
@@ -547,6 +549,7 @@ local function LayoutCast(d)
 	for _, side in ipairs({ "top", "bottom", "left", "right" }) do box.lines[side]:SetShown(lined) end
 	pcall(box.SetFrameLevel, box, math.max(0, (Clean(Safe(bar.GetFrameLevel, bar)) or 1) - 1))
 	if c.text then
+		-- (room at the right for a timer, where there is one)
 		Place(c.text, { "LEFT", bar, "LEFT", 3, 0 }, { "RIGHT", bar, "RIGHT", #c.others > 0 and -26 or -3, 0 })
 		pcall(c.text.SetJustifyH, c.text, "LEFT")
 		pcall(c.text.SetWordWrap, c.text, false)
@@ -749,6 +752,7 @@ local function Carve(d, portrait, size, px)
 	local want = (portrait and type(size) == "number" and size > 0) and true or false
 	for _, hole in ipairs(d.holes) do
 		if want then
+			-- (the mask sized so its hole's radius is a pixel under the face's)
 			local side = math.max(1, size / 2 - px) / HOLE_AT
 			hole.mask:ClearAllPoints()
 			hole.mask:SetPoint("CENTER", portrait, "CENTER", 0, 0)
@@ -985,7 +989,7 @@ local function Watch(d, region)
 		if holding then return end
 		d.dirty = true
 		-- (laid out again on the next frame, once the game is done moving its parts)
-		if d.pending or not C_Timer then return end
+		if d.pending or not C_Timer then return end -- (one already waiting: many moves, one layout)
 		d.pending = true
 		C_Timer.After(0, function()
 			d.pending = false
@@ -1066,6 +1070,7 @@ end
 FitDragon = function(d)
 	local dragon = d.dragon
 	if not dragon then return end
+	-- (only on the right, the side the game draws it for)
 	if not (ns.On("unitElite") and ns.On("unitPortraits") and d.portrait and d.size and d.side == "right") then
 		PutAway(dragon)
 		return
@@ -1179,6 +1184,7 @@ local function Segments(d)
 		if not d.reversed and not mirrored[segment] then return end -- (the game's own placing: left alone)
 		local bar = rawget(segment, "statusBar") or health
 		local width = Clean(Safe(bar.GetWidth, bar))
+		-- (the width secret in a fight: hung with no offset)
 		local x = (type(width) == "number" and type(at[2]) == "number") and width * at[2] or 0
 		pcall(mask.ClearAllPoints, mask)
 		if d.reversed then
@@ -1284,7 +1290,7 @@ end
 local calculator
 local function Calculator()
 	if calculator == nil then
-		calculator = false
+		calculator = false -- (tried once: false where this client has none)
 		if type(CreateUnitHealPredictionCalculator) == "function" then
 			local made = Safe(CreateUnitHealPredictionCalculator)
 			if made and pcall(function()
@@ -1304,6 +1310,7 @@ local function Casting()
 	for _, info in ipairs({ UnitCastingInfo or false, UnitChannelInfo or false }) do
 		if info then
 			local name = Safe(info, "player")
+			-- (a secret name is still a cast: asked whether it is secret before it is tested)
 			if ns.IsSecret(name) or name then return true end
 		end
 	end
@@ -1320,6 +1327,7 @@ local function Overheal(d)
 	local over = false
 	if active and unit and calc and type(UnitGetDetailedHealPrediction) == "function"
 		and pcall(UnitGetDetailedHealPrediction, unit, "player", calc) then
+		-- (all heals coming, yours, others', and whether they were clamped at the health missing)
 		local ok, _, mine, _, clamped = pcall(calc.GetIncomingHeals, calc)
 		if ok then
 			local yours
@@ -1481,6 +1489,7 @@ local function Dress(frame, name)
 			d.stubs[bar] = d.box:CreateTexture(nil, "ARTWORK")
 			d.stubs[bar]:SetTexture(FLAT)
 			d.stubs[bar]:Hide()
+			-- (an empty bar loses its stub, a filling one gets it back)
 			bar:HookScript("OnValueChanged", function() if d.Stubs then d:Stubs() end end)
 		end
 	end
@@ -1609,6 +1618,7 @@ local function Init()
 		pcall(events.RegisterEvent, events, event)
 	end
 	events:SetScript("OnEvent", function(_, event)
+		-- (a frame that comes later, with another of the game's addons or a new world: dressed then)
 		if event == "ADDON_LOADED" or event == "PLAYER_ENTERING_WORLD" then DressAll() end
 		if event == "PLAYER_REGEN_ENABLED" then
 			-- (the target's target's frame, waiting for the fight to end: placed now)

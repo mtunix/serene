@@ -22,7 +22,7 @@ local INK = ns.INK
 local GOLD = { 1, 0.82, 0.35 }
 local GCD_SPELL = 61304       -- the game's own spell for the global cooldown
 local SOON = 3                -- the last seconds, when the numbers show only then
-local CHECK_EVERY = 0.1
+local CHECK_EVERY = 0.1       -- the lines and the last seconds' numbers looked at again
 local LINE_PX = 2             -- the cooldown line and the global cooldown line, in pixels
 local FRAME_IN = 3 / 45       -- Classic: the game's frame covers this much of the icon (its sweep sits 3 in on 45)
 
@@ -43,6 +43,7 @@ end
 
 local function Timer(bar, duration)
 	local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.Immediate
+	-- (filling with the time gone: full when ready)
 	local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime
 	return pcall(bar.SetTimerDuration, bar, duration, interpolation, direction)
 end
@@ -93,7 +94,7 @@ local function PlaceLine(button)
 	line:SetHeight(LINE_PX * px)
 	local cooldown = button.cooldown
 	local level = cooldown and Clean(Safe(cooldown.GetFrameLevel, cooldown)) or Clean(Safe(button.GetFrameLevel, button))
-	if type(level) == "number" then line:SetFrameLevel(level + 2) end
+	if type(level) == "number" then line:SetFrameLevel(level + 2) end -- (over the cooldown's sweep)
 end
 
 -- The line shown and timed while a cooldown (not the global one) runs.
@@ -103,6 +104,7 @@ local function UpdateLine(button)
 	local slot = Slot(button)
 	if looked[button] ~= "line" or not slot then return line:Hide() end
 	local duration = Duration(slot)
+	-- (a secret answer hides it: unknown never shows a cooldown)
 	if Zero(duration) == false then
 		Timer(line, duration)
 		line:Show()
@@ -160,6 +162,7 @@ local function Hear(button)
 	hooked[cooldown] = true
 	local function Again()
 		if holding or not looked[button] then return end
+		-- (a frame later, once the game is done setting it)
 		C_Timer.After(0, function() if looked[button] then Paint(button, looked[button], ns.BarStyleOf(button)) end end)
 	end
 	for _, method in ipairs({ "SetSwipeColor", "SetDrawSwipe", "SetSwipeTexture" }) do
@@ -191,7 +194,7 @@ end
 
 -- (the last seconds: a step the game samples on the duration, 1 under SOON seconds left, 0 above)
 local function Curve()
-	if curve ~= nil then return curve or nil end
+	if curve ~= nil then return curve or nil end -- (false: tried, and this client can't make one)
 	curve = false
 	if not (C_CurveUtil and C_CurveUtil.CreateCurve) then return nil end
 	local ok, made = pcall(C_CurveUtil.CreateCurve)
@@ -227,7 +230,7 @@ function ns.CooldownLook(button)
 	if not Active() or InCombatLockdown() then return end
 	local mode, style = Mode(button)
 	if looked[button] == nil and mode == "sweep" and style == "classic" then
-		-- (Classic with the game's sweep: the game's own, untouched)
+		-- (Classic with the game's sweep: the game's own, untouched; once given another look, it is painted back)
 		Numbers(button)
 		return
 	end
@@ -250,6 +253,7 @@ local function StripGcd(button)
 	-- (a loss of control shown in the cooldown's place: the game's)
 	if CAB and CAB.GetActionLossOfControlCooldownInfo then
 		local info = Safe(CAB.GetActionLossOfControlCooldownInfo, slot)
+		-- (read inside a closure: the table itself may be secret)
 		if info and Clean(Safe(function() return info.shouldReplaceNormalCooldown end)) then return end
 	end
 	local duration = Duration(slot)
@@ -267,6 +271,7 @@ local function GcdBar()
 	local bar = _G.MainActionBar or _G.MainMenuBar
 	local first, last = _G.ActionButton1, _G.ActionButton12
 	if type(first) ~= "table" then return nil end
+	-- (on the main bar, so Fade fades it with the bar)
 	gcdBar = CreateFrame("StatusBar", "SereneGlobalCooldown", type(bar) == "table" and bar or UIParent)
 	gcdBar:SetStatusBarTexture(FLAT)
 	gcdBar:SetStatusBarColor(GOLD[1], GOLD[2], GOLD[3], 0.85)
@@ -299,6 +304,7 @@ local function UpdateGcd()
 	if GcdActive() then
 		local duration = C_Spell.GetSpellCooldownDuration and Safe(C_Spell.GetSpellCooldownDuration, GCD_SPELL, false)
 		if duration and Zero(duration) ~= true then
+			-- (timed again only for a new duration: restarting the timer would make the line jump)
 			if bar.want ~= 1 or bar.duration ~= duration then
 				Timer(bar, duration)
 				bar.duration = duration
@@ -357,6 +363,7 @@ local function Init()
 		since = since + elapsed
 		if since < CHECK_EVERY then return end
 		since = 0
+		-- (its end, in case no event told of it)
 		if gcdBar and gcdBar.want == 1 and not GcdActive() then gcdBar.want = 0 end
 		local soon = ns.db and ns.db.barCooldownText == "soon"
 		for button in pairs(lines) do UpdateLine(button) end

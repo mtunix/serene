@@ -39,6 +39,7 @@ local function Read(slot)
 		local name = Clean(Safe(GetActionText, slot))
 		return { kind = "macro", name = name, id = id }
 	end
+	-- (an equipment set's id is its name)
 	if kind == "equipmentset" then return { kind = kind, name = type(id) == "string" and id or nil, id = id } end
 	return { kind = kind, id = id }
 end
@@ -131,7 +132,9 @@ local Snapshot, Show -- (below)
 -- Serene's own placing: its changes not taken for yours, the copy taken once it is done.
 local function Placing(fn)
 	placing = true
+	-- (in pcall: placing always ends, even if fn fails)
 	local ok, a, b = pcall(fn)
+	-- (past SETTLE, so the slot changes it caused have all come and been muted)
 	C_Timer.After(SETTLE + 0.2, function()
 		placing = false
 		-- (what Serene itself changed is no loss: the bars as they are now become the copy, nothing compared)
@@ -178,6 +181,7 @@ local function Pill()
 	if pill then return pill end
 	local last = _G.ActionButton12
 	if type(last) ~= "table" then return nil end
+	-- (on UIParent, not the bar: seen while the bars are faded)
 	pill = CreateFrame("Button", "SereneBarSetsButton", UIParent)
 	pill:SetFrameStrata("MEDIUM")
 	pill:SetHeight(20)
@@ -222,6 +226,7 @@ Show = function()
 	local button = Pill()
 	if not button then return end
 	local lost = store and Count(store.lost) or 0
+	-- (nothing can be put back in a fight)
 	if not ns.On("barSets") or lost == 0 or InCombatLockdown() then return button:Hide() end
 	local waiting = 0
 	for _, record in pairs(store.lost) do
@@ -246,6 +251,7 @@ Snapshot = function()
 	if store and not ns.On("barSets") then store.stale = true end
 	if not store or not settled or placing or not ns.On("barSets") then return end
 	if Busy() then
+		-- (a fight: looked at again when it ends; something on the cursor: again in a moment)
 		fightWaits = fightWaits or InCombatLockdown()
 		if not InCombatLockdown() then C_Timer.After(SETTLE, Snapshot) end
 		return
@@ -387,7 +393,7 @@ local function Init()
 			return Show()
 		end
 		if event == "ACTIONBAR_SLOT_CHANGED" then return Queue() end
-		-- (a spell learnt: the copy looked at again, and what waits for it brought back)
+		-- (a spell learnt: the copy looked at again, and what waits for it brought back once that copy is taken)
 		Queue()
 		C_Timer.After(SETTLE + 0.5, Learnt)
 	end)

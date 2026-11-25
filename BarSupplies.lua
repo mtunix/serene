@@ -21,7 +21,7 @@ local KINDS = {
 }
 ns.SUPPLY_KINDS = KINDS
 local ICON = 134400        -- the question mark: with #showtooltip the macro shows the item's own icon
-local BAGS = 4             -- the backpack and the four bags (0-4)
+local BAGS = 4             -- the backpack and the four bags (0-4; the reagent bag holds no supplies)
 local HEALTHSTONES = {     -- (a healthstone first: it doesn't share the potions' cooldown)
 	[5512] = true, [19004] = true, [19005] = true, [5511] = true, [19006] = true, [19007] = true,
 	[5509] = true, [19008] = true, [19009] = true, [5510] = true, [19010] = true, [19011] = true,
@@ -66,6 +66,7 @@ end
 local function KindOf(item)
 	if HEALTHSTONES[item] then return "health" end
 	local class, subclass = Instant(item)
+	-- (consumables only: class 0; subclass 7 is Bandage)
 	if class ~= 0 then return nil end
 	local spell = ItemSpell(item)
 	if subclass == 7 or (spell and spell == names.bandage) then return "bandage" end
@@ -99,6 +100,7 @@ local function Choose()
 			local name, itemLevel, minLevel, price = Info(item)
 			if name and (minLevel or 0) <= level and Usable(item) then
 				-- (higher level first; conjured, free, before bought; a smaller stack before a bigger, to free room)
+				-- (each part too small to outweigh the one before it)
 				local conjured = price == 0 and 1 or 0
 				local buff = kind == "food" and ns.MakesWellFed and ns.MakesWellFed(item) and 1 or 0
 				local score = (1 - buff) * 1e6 + (HEALTHSTONES[item] and 5e5 or 0) + (itemLevel or 0) * 100
@@ -138,6 +140,8 @@ local function Update()
 		local index = MacroIndex(kind)
 		if index then
 			local item = best or store.last[kind.key]
+			-- (rewritten only when it differs, with or without the trailing newline the game may add: each edit
+			-- fires UPDATE_MACROS, which looks again)
 			local _, _, body = Safe(GetMacroInfo, index)
 			if Clean(body) ~= Body(item) .. "\n" and Clean(body) ~= Body(item) then
 				Safe(EditMacro, index, kind.macro, ICON, Body(item))
@@ -163,6 +167,7 @@ function ns.SupplyPickup(key)
 	if not index then
 		local found = Choose()
 		local item = found[key] and found[key].item or store.last[key]
+		-- (true: one of this character's macros, not the account's)
 		local ok, made = pcall(CreateMacro, kind.macro, ICON, Body(item), true)
 		index = ok and Clean(made)
 		if type(index) ~= "number" then
@@ -184,6 +189,7 @@ local function Init()
 	store.last = store.last or {}
 	for key, id in pairs(SPELLS) do names[key] = SpellName(id) end
 	local events = CreateFrame("Frame")
+	-- (GET_ITEM_INFO_RECEIVED: an item whose info was not loaded yet counts once it is)
 	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
 		"GET_ITEM_INFO_RECEIVED", "SKILL_LINES_CHANGED", "UPDATE_MACROS" }) do
 		pcall(events.RegisterEvent, events, event)
@@ -194,6 +200,7 @@ local function Init()
 			fightWaits = false
 		end
 		if event == "PLAYER_ENTERING_WORLD" then
+			-- (a spell's name may not be loaded yet at login)
 			for key, id in pairs(SPELLS) do names[key] = names[key] or SpellName(id) end
 		end
 		Queue()

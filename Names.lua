@@ -9,7 +9,7 @@ local CVARS = { "UnitNameOwn", "UnitNameNPC", "UnitNameFriendlyPlayerName", "Uni
 	"UnitNameFriendlyPetName", "UnitNameEnemyPetName", "UnitNameFriendlyGuardianName", "UnitNameEnemyGuardianName",
 	"UnitNameFriendlyTotemName", "UnitNameEnemyTotemName", "UnitNameNonCombatCreatureName", "UnitNamePlayerGuild",
 	"UnitNamePlayerPVPTitle", "UnitNameGuildTitle", "UnitNameFriendlyMinionName", "UnitNameEnemyMinionName",
-	"UnitNameInteractiveNPC", "UnitNameHostleNPC", "UnitNameFriendlySpecialNPCName" }
+	"UnitNameInteractiveNPC", "UnitNameHostleNPC", "UnitNameFriendlySpecialNPCName" } -- ("Hostle": the game's spelling)
 local DEFAULT_KEY = "`"
 
 local function GetVar(name)
@@ -29,7 +29,7 @@ local function Hide()
 	local saved = {}
 	for _, name in ipairs(CVARS) do
 		local value = GetVar(name)
-		if value ~= nil then
+		if value ~= nil then -- (only the ones this client has)
 			saved[name] = value
 			SetVar(name, "0")
 		end
@@ -57,14 +57,14 @@ local function BindOnce()
 	ns.db.namesKeyGiven = true
 	if Safe(GetBindingKey, "SERENE_NAMES") then return end
 	local action = Clean(Safe(GetBindingAction, DEFAULT_KEY)) or ""
-	if action ~= "" and not action:find("^WANDERER") then
+	if action ~= "" and not action:find("^WANDERER") then -- (Wanderer's bindings outlive the addon)
 		ns.Print(("the key %s does %s already: set one for \"Hide / show names\" in Key Bindings > AddOns")
 			:format(DEFAULT_KEY, action))
 		return
 	end
 	if pcall(SetBinding, DEFAULT_KEY, "SERENE_NAMES") then
 		local set = Clean(Safe(GetCurrentBindingSet))
-		if set then Safe(SaveBindings, set) end
+		if set then Safe(SaveBindings, set) end -- (kept past this session)
 	end
 end
 

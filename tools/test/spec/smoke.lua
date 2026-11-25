@@ -173,7 +173,7 @@ test("each word setting's choices at login", function()
 	World()
 	for key, words in pairs(Choices()) do
 		for _, word in ipairs(words) do
-			-- (only the last login counts for the stub, but every value goes through the migrations and init)
+			-- (each ADDON_LOADED migrates the value set the turn before; init runs only at the login below)
 			local saved = { [key] = word }
 			wow.fire("ADDON_LOADED", "Serene")
 			SereneDB = saved

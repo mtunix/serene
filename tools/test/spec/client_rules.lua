@@ -1,5 +1,6 @@
 -- Things this client won't take, checked in the source.
 
+-- A file's lines without their comments (a comment may name what the code mustn't use).
 local function Code(file)
 	local lines = {}
 	for line in io.lines(wow.root .. "/" .. file) do lines[#lines + 1] = (line:gsub("%-%-.*$", "")) end

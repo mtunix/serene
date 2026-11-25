@@ -6,7 +6,7 @@ import struct, sys, math
 src, out_path = sys.argv[1], sys.argv[2]
 d = open(src, 'rb').read()
 W, H = struct.unpack('<HH', d[12:16])
-top_left = d[17] & 0x20
+top_left = d[17] & 0x20  # (the descriptor's bit 5: rows stored from the top)
 px = d[18 + d[0]:]
 
 def alpha(x, y):
@@ -34,6 +34,7 @@ for y in range(H):
     for x in range(W):
         r = math.hypot(x + 0.5 - W / 2, y + 0.5 - H / 2) - 0.5
         out += bytes((255, 255, 255, int(round(max(0.0, min(255.0, at(max(0.0, r))))))))
+# (an uncompressed 32-bit TGA, type 2: descriptor 40 is 8 alpha bits, rows from the top)
 hdr = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, W, H, 32, 0x28)
 open(out_path, 'wb').write(hdr + out)
 print('profile peak at texel', max(range(half), key=lambda i: profile[i]), 'of', half)

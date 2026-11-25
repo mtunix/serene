@@ -40,7 +40,7 @@ local Items = ns.Items
 local AUTO = Items.SECTIONS
 local IS_AUTO = {}
 for _, name in ipairs(AUTO) do IS_AUTO[name] = true end
--- (a special bag's kind, by the lowest bit of its family)
+-- (a special bag's kind, by a bit of its family: walked with pairs, so with several bits set, any one of them)
 local FAMILY = { [1] = "quiver", [2] = "ammo", [4] = "soul", [8] = "leather", [16] = "inscription", [32] = "herbs",
 	[64] = "enchanting", [128] = "engineering", [256] = "keys", [512] = "gems", [1024] = "mining" }
 local QUALITY = { [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 }, [4] = { 0.64, 0.21, 0.93 }, [5] = { 1, 0.5, 0 },
@@ -51,7 +51,7 @@ local bags, bank           -- the two windows
 local hidden               -- where the game's own windows wait, out of sight
 local bankLive = false     -- talking to a banker now
 local revealing = false    -- the game's bank shown for a moment (to buy a tab)
-local syncing = false
+local syncing = false      -- (Serene closing the game's bags itself: Sync doesn't answer)
 local protectedButtons = false -- the game's item buttons are protected here: laid out only out of a fight
 local glowAt, glowed = {}, {}  -- "bag:slot" -> when its glow began / glowed this opening
 local glowUntil = 0            -- (no glow after this: nothing to animate)
@@ -101,7 +101,7 @@ local function Tabbed()
 	if types and C_Bank and C_Bank.CanPurchaseBankTab and Clean(Safe(C_Bank.CanPurchaseBankTab, types.Character)) then
 		return true
 	end
-	return not _G.GetNumBankSlots
+	return not _G.GetNumBankSlots -- (no call for the older bank's slots: only the newer kind)
 end
 
 -- The inventory slot a bag sits in (what the game puts a bag in, or takes one from).
@@ -110,7 +110,8 @@ local function InvSlot(bag)
 	return type(slot) == "number" and slot or nil
 end
 
--- The bag slots: { bag, inv, name, has (its icon), locked (not bought), buyable (the next to buy) }.
+-- The bag slots: { bag, inv, name, has (its icon), busy (the game has it locked), locked (not bought), buyable (the
+-- next to buy) }; ReadSlot fills in inv, has and busy.
 local function BagSlots()
 	local list = {}
 	for bag = 1, (NUM_BAG_SLOTS or 4) do list[#list + 1] = { bag = bag, name = "Bag slot" } end
@@ -138,6 +139,7 @@ local TabInvSlot = C_Bank and C_Bank.BankBagTypeAndIDToInvSlot
 local function TabInv(index, id)
 	local types = Enum and Enum.BankType
 	if not (TabInvSlot and types) then return nil end
+	-- (unknown whether the game wants the tab's index or its id: both asked, /serene debug shows each)
 	for _, key in ipairs({ index, id }) do
 		local inv = Clean(Safe(TabInvSlot, types.Character, key))
 		if type(inv) == "number" and inv > 0 then return inv end
@@ -159,6 +161,7 @@ local function ReadSlot(slot)
 	if slot.tab then
 		slot.inv = slot.tabInv or nil
 	else
+		-- (the older bank's bag slots: by their number, 1 asking for a bag slot rather than an item slot)
 		slot.inv = InvSlot(slot.bag) or (slot.index and Clean(Safe(_G.BankButtonIDToInvSlotID, slot.index, 1))) or nil
 	end
 	slot.has = slot.inv and not slot.locked and Clean(Safe(GetInventoryItemTexture, "player", slot.inv)) or nil
@@ -220,7 +223,7 @@ local function Cells(entries)
 			cell.slots[#cell.slots + 1] = entry
 		else
 			cell = { first = entry, live = entry, count = entry.count, locked = entry.locked, quality = entry.quality,
-				slots = { entry }, quest = entry.quest or entry.classID == 12 }
+				slots = { entry }, quest = entry.quest or entry.classID == 12 } -- (12: the quest item class)
 			if entry.merge then byLink[entry.link] = cell end
 			cells[#cells + 1] = cell
 		end
@@ -235,6 +238,7 @@ local function Earlier(a, b)
 	if x.subclassID ~= y.subclassID then return x.subclassID < y.subclassID end
 	if x.name ~= y.name then return x.name < y.name end
 	if a.count ~= b.count then return a.count > b.count end
+	-- (last, where they lie: table.sort isn't stable, and equal cells would swap between redraws)
 	if x.bag ~= y.bag then return (x.bag or 0) < (y.bag or 0) end
 	return (x.slot or 0) < (y.slot or 0)
 end
@@ -462,6 +466,7 @@ local function Holder(win, bag)
 	holder = CreateFrame("Frame", nil, win)
 	holder:SetID(bag)
 	holder:SetAllPoints(win)
+	-- (what the template asks its parent: a bag of its own, not the combined backpack)
 	holder.IsCombinedBagContainer = function() return false end
 	holder.GetBagID = function(self) return self:GetID() end
 	win.holders[bag] = holder
@@ -486,6 +491,7 @@ local function LiveButton(win, bag, slot)
 	button = created
 	button:SetID(slot)
 	if button.SetBagID and Clean(Safe(button.GetBagID, button)) ~= bag then Safe(button.SetBagID, button, bag) end
+	-- (read once, from the first button: the rest are the same)
 	if made == 1 then protectedButtons = Clean(Safe(button.IsProtected, button)) and true or false end
 	Dress(button)
 	button:HookScript("OnClick", OnItemClick)
@@ -585,7 +591,7 @@ local function PaintOffline(button, cell)
 	local entry = cell.first
 	button.link, button.sereneCell = entry.link, cell
 	button.sereneIcon:SetTexture(entry.icon)
-	button.sereneIcon:SetAlpha(cell.quality == 0 and JUNK_ALPHA or 0.85)
+	button.sereneIcon:SetAlpha(cell.quality == 0 and JUNK_ALPHA or 0.85) -- (remembered: a touch quieter than live)
 	button.sereneCount:SetText(cell.count > 1 and cell.count or "")
 	Edge(button, cell.quality, cell.quest)
 	button.sereneGlow:SetAlpha(0)
@@ -636,6 +642,7 @@ local function MakeMenu()
 	end)
 	edit:Hide()
 	menu.edit = edit
+	-- (the mouse gone from it a moment, a little margin allowed: it closes by itself)
 	menu:SetScript("OnUpdate", function(self)
 		if self:IsMouseOver(4, -4, -4, 4) or edit:HasFocus() then menuLast = GetTime() return end
 		if GetTime() - menuLast > 1.2 then self:Hide() end
@@ -708,6 +715,7 @@ Menu = function(owner, rows)
 	for index = #rows + 1, #menu.rows do menu.rows[index]:Hide() end
 	menu:SetSize(MENU_WIDTH, -y + 8)
 	menu:ClearAllPoints()
+	-- (the cursor in screen pixels: brought into UIParent's units)
 	local x, top = GetCursorPosition()
 	local scale = UIParent:GetEffectiveScale()
 	menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale - 10, top / scale + 10)
@@ -746,6 +754,7 @@ local function SectionMenu(owner, cell)
 		rows[#rows + 1] = { text = name, muted = true, on = pin == name, action = function() Pin(id, name) end }
 	end
 	rows[#rows + 1] = { text = "A section of your own...", edit = function(text)
+		-- (a built-in section's name typed: pinned there, not made a second time)
 		if IS_AUTO[text] then return Pin(id, text) end
 		if not IsCustom(text) then table.insert(ns.db.bagCats, text) end
 		Pin(id, text)
@@ -783,6 +792,7 @@ local function Text(parent, font, color)
 	return text
 end
 
+-- (each from the corner Place anchors it by: the bags bottom right, the bank top left)
 local function SavePosition(win)
 	local key = win.kind == "bags" and "bagsPos" or "bankPos"
 	if win.kind == "bags" then
@@ -835,7 +845,7 @@ local function Drags(frame, win)
 		win.droppedAt, target.droppedAt = GetTime(), GetTime()
 		target:StopMovingOrSizing()
 		SavePosition(target)
-		Place(target)
+		Place(target) -- (back on its own anchor, not the one StartMoving left)
 		if target ~= win then
 			Refresh(target)
 			Refresh(win)
@@ -1265,6 +1275,7 @@ local function Delete()
 	-- (the slot read again: the bags may have changed since it was suggested)
 	local now = SlotInfo(entry.bag, entry.slot)
 	if not now or now.link ~= entry.link or now.count ~= entry.count or now.locked then return Refresh(bags) end
+	-- (something already on the cursor: let go first, or the pickup would swap it into the slot)
 	if Safe(GetCursorInfo) then Safe(ClearCursor) end
 	Safe(PickupItem, entry.bag, entry.slot)
 	local kind, id = Safe(GetCursorInfo)
@@ -1316,6 +1327,7 @@ local function MakeRoom()
 	room.title = Text(room, "GameFontNormalSmall", MUTED_RGB)
 	room.title:SetPoint("TOPLEFT", room, "TOPLEFT", PAD, -10)
 	room.title:SetText("THE CHEAPEST IN YOUR BAGS")
+	-- (its words made on the bags, for their drag and click-after-drag guard, then moved into the glass)
 	room.close = Word(bags, "×", function() ToggleRoom() end)
 	room.close:SetParent(room)
 	room.close:SetPoint("TOPRIGHT", room, "TOPRIGHT", -PAD + 3, -5)
@@ -1433,6 +1445,7 @@ end
 
 -- Laying out ------------------------------------------------------------------------------------------------------------
 
+-- (the panel offers 6 to 16; a value set by hand is kept within 4 to 24)
 local function Columns()
 	return math.max(4, math.min(24, math.floor(tonumber(ns.db.bagColumns) or 10)))
 end
@@ -1568,7 +1581,7 @@ local function TabsRow(win, live)
 	if not win.bankBags then
 		if types and C_Bank and Clean(Safe(C_Bank.CanPurchaseBankTab, types.Character)) then
 			local data = C_Bank.FetchNextPurchasableBankTabData and Safe(C_Bank.FetchNextPurchasableBankTabData, types.Character)
-			cost = type(data) == "table" and Clean(data.tabCost or data.cost) or nil
+			cost = type(data) == "table" and Clean(data.tabCost or data.cost) or nil -- (whichever key the client fills)
 			what = "tab"
 		end
 	else
@@ -1583,6 +1596,7 @@ local function TabsRow(win, live)
 		win.buy = function()
 			local frame = _G.BankFrame
 			if not frame then return end
+			-- (the game's own bank page, with its price and confirmation; put away again on BANKFRAME_CLOSED)
 			revealing = true
 			frame:SetParent(UIParent)
 			win:Hide()
@@ -1616,8 +1630,9 @@ end
 
 Refresh = function(win)
 	if not win or not win:IsShown() then return end
-	if win.moving then return end
+	if win.moving then return end -- (being dragged: this refresh is dropped, not deferred)
 	local live = IsLive(win)
+	-- (the game's item buttons can't be placed in a fight: after it)
 	if live and protectedButtons and InCombatLockdown() then win.pending = true return end
 	win.pending = false
 	local where = win.kind == "bags" and "bags" or "bank"
@@ -1693,6 +1708,8 @@ local function CloseBankInteraction()
 	if _G.CloseBankFrame then Safe(_G.CloseBankFrame) end
 end
 
+-- (in a hidden parent the game's frames still report IsShown: the game's open and closed logic keeps working, and
+-- its Show and Hide are followed)
 local function HideGameWindows()
 	hidden = CreateFrame("Frame", nil, UIParent)
 	hidden:Hide()
@@ -1833,7 +1850,7 @@ local function OnEvent(_, event)
 			revealing = false
 			if _G.BankFrame and hidden then _G.BankFrame:SetParent(hidden) end
 		end
-		if bank:IsShown() and not bank.viewing then bank:Hide() end
+		if bank:IsShown() and not bank.viewing then bank:Hide() end -- (another character's bank stays open)
 		if bagsByBank and bags:IsShown() then bags:Hide() end
 		bagsByBank = false
 	elseif event == "PLAYER_REGEN_ENABLED" then
@@ -1861,7 +1878,7 @@ local function Init()
 		-- (what glowed has been seen)
 		if C_NewItems and C_NewItems.RemoveNewItem then
 			for key in pairs(glowed) do
-				local bag, slot = key:match("^(-?%d+):(%d+)$")
+				local bag, slot = key:match("^(-?%d+):(%d+)$") -- (a bag's number may be negative: the keyring)
 				Safe(C_NewItems.RemoveNewItem, tonumber(bag), tonumber(slot))
 			end
 		end

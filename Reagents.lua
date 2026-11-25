@@ -34,6 +34,7 @@ end
 local function Prefix()
 	local text = rawget(_G, "SPELL_REAGENTS")
 	if type(text) == "string" then
+		-- (the game's string holds the list's %s and a line break: only the words before them)
 		text = text:gsub("%%s", ""):gsub("|n", ""):gsub("%s+$", "")
 		if text ~= "" then return text end
 	end
@@ -50,6 +51,7 @@ local function ReagentsOf(slot, id)
 	for _, line in ipairs(lines) do
 		local text = Clean(line.leftText)
 		if type(text) == "string" then
+			-- (a reagent you lack is written in red: its colour codes taken out)
 			text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 			if text:sub(1, #prefix) == prefix then
 				local names = {}
@@ -72,6 +74,7 @@ local function Paint(button)
 	-- (a count never coloured is left as the game draws it)
 	if left == nil and not painted[button] then return end
 	painted[button] = left ~= nil or nil
+	-- (given back as soft white, the colour ActionBars.lua dresses counts in)
 	local c = left == nil and SOFT or (left <= 0 and OUT or LOW)
 	pcall(count.SetTextColor, count, c[1], c[2], c[3])
 end
@@ -101,6 +104,7 @@ end
 local function Queue()
 	if queued then return end
 	queued = true
+	-- (bag and bar events come in bursts: one look after them)
 	C_Timer.After(0.3, Look)
 end
 
@@ -133,6 +137,7 @@ local function Init()
 	end
 	events:SetScript("OnEvent", function(_, event)
 		if event == "MERCHANT_SHOW" then
+			-- (at once: the line wants today's counts)
 			Look()
 			return Merchant()
 		end

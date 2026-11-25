@@ -16,7 +16,8 @@ local Safe, Clean, Over = ns.Safe, ns.Clean, ns.Over
 --   instance's difficulty stay where the game puts them (the queue's eye comes and goes with the compass; the top
 --   bar tells of the queue meanwhile).
 -- * Square instead of round: /serene edge square.
--- When it shows (always in the world, hidden in cities and towns) is Fade.lua's.
+-- /serene minimap on|off (a reload to switch). When it shows (under the mouse; with /serene compass world, always
+-- outside cities and towns) is Fade.lua's.
 
 local RING = "Interface\\AddOns\\Serene\\Media\\CompassRing"
 local SHADOW = "Interface\\AddOns\\Serene\\Media\\CompassShadow"
@@ -28,8 +29,8 @@ local RING_COLOR = { 1, 0.88, 0.62, 0.9 }
 local NORTH_COLOR = { 1, 0.82, 0.35 }
 local LETTER_COLOR = { 0.88, 0.87, 0.84 }
 local INK = { 0.035, 0.04, 0.05 }
-local HOVER_IN, HOVER_OUT, LINGER = 0.15, 0.4, 0.8
-local INFO_EVERY = 0.25
+local HOVER_IN, HOVER_OUT, LINGER = 0.15, 0.4, 0.8 -- seconds: the round buttons coming, going, staying after the mouse
+local INFO_EVERY = 0.25 -- seconds between the band's words written again
 local AGAIN = 2 -- seconds: buttons added by addons meanwhile, pieces the game showed again
 
 local ZONE_COLORS = {
@@ -61,10 +62,10 @@ local fly, flyOpen, flyLast = nil, false, -math.huge
 local flySlots, flyList = {}, {} -- the panel's slots; the icons in them, in order
 local flyShow = 0                -- the panel's opening, 0 (closed) to 1 (open)
 local flyH = -1                  -- the side it opens to: -1 left, 1 right (it grows up from its button)
-local hover, lastNear = 0, -math.huge
+local hover, lastNear = 0, -math.huge -- the round buttons' opacity; when the mouse was last near the compass
 local buttons = {} -- frame -> true: shown under the mouse
 local letters = {}
-local laidWidth, laidFacing, laidSquare, laidH, laidV
+local laidWidth, laidFacing, laidSquare, laidH, laidV -- (what Layout last placed for: unchanged, it does nothing)
 
 local function Part(owner, key)
 	local value = type(owner) == "table" and owner[key] or nil
@@ -120,7 +121,7 @@ local QUEUE_WORDS = { "Queue", "LFG", "Battlefield" }
 local queueFrames, queueSeen, queueLooked = {}, {}, -math.huge
 function ns.QueueFrames()
 	local now = GetTime()
-	if now - queueLooked < 2 then return queueFrames end
+	if now - queueLooked < 2 then return queueFrames end -- (the top bar asks twice a second)
 	queueLooked = now
 	wipe(queueFrames)
 	wipe(queueSeen)
@@ -163,6 +164,7 @@ local function FindTargets()
 	local cluster = MinimapCluster
 	local tracking = Part(cluster, "Tracking") or _G.MiniMapTracking
 	targets.tracking = Part(tracking, "Button") or _G.MiniMapTrackingButton or tracking
+	-- (its holder too: kept unseen, and out of the clutter Gather tucks away)
 	targets.trackingHolder = targets.tracking ~= tracking and tracking or nil
 end
 
@@ -389,7 +391,7 @@ local function SquareLines(width, show)
 	local function Edge(line, thickness, out)
 		return line, thickness, out
 	end
-	-- (inner: the pale frame on the map's edge; outer: a dark line just outside it)
+	-- (inner: the pale frame on the map's edge; outer: a dark line just outside it; each { thickness, gap outside })
 	for index, spec in ipairs({ { 2, 0 }, { 2, 0 }, { 2, 0 }, { 2, 0 }, { 1, 2 }, { 1, 2 }, { 1, 2 }, { 1, 2 } }) do
 		local line, thickness, out = Edge(lines[index], spec[1], spec[2])
 		local side = (index - 1) % 4
@@ -417,7 +419,7 @@ local function Side()
 	local ms = Clean(Safe(Minimap.GetEffectiveScale, Minimap))
 	local us = Clean(Safe(UIParent.GetEffectiveScale, UIParent))
 	mx, my, ux, uy = Clean(mx), Clean(my), Clean(ux), Clean(uy)
-	if not (mx and my and ux and uy and ms and us) then return -1, -1 end
+	if not (mx and my and ux and uy and ms and us) then return -1, -1 end -- (unknown: top right, the game's corner)
 	return (mx * ms > ux * us) and -1 or 1, (my * ms > uy * us) and -1 or 1
 end
 
@@ -430,7 +432,7 @@ local function Layout()
 	if Clean(Safe(GetCVar, "rotateMinimap")) == "1" then
 		facing = Clean(Safe(GetPlayerFacing)) or 0
 	end
-	facing = math.floor(facing * 200 + 0.5) / 200 -- (a hundredth of a turn's worth: no work for nothing)
+	facing = math.floor(facing * 200 + 0.5) / 200 -- (in 1/200 radian, under a third of a degree: no work for nothing)
 	local h, v = Side()
 	if width == laidWidth and facing == laidFacing and square == laidSquare and h == laidH and v == laidV then return end
 	local resized = width ~= laidWidth or square ~= laidSquare or h ~= laidH or v ~= laidV
@@ -442,6 +444,7 @@ local function Layout()
 		deco.shadow:SetShown(not square)
 		SquareLines(width, square)
 		info:ClearAllPoints()
+		-- (just under the letters' circle, clear of the S)
 		info:SetPoint("TOP", Minimap, "BOTTOM", 0, -(width * (SCALE * LETTER_AT - 1) / 2 + 14))
 		if ns.PlaceSatellites then ns.PlaceSatellites() end
 		if ns.PlaceFly and not InCombatLockdown() then ns.PlaceFly() end
@@ -477,6 +480,7 @@ local function Coordinates()
 end
 
 local function Clock()
+	-- (the game's own clock, in its 12 or 24 hour setting; else the computer's)
 	if GameTime_GetTime then
 		local text = Clean(Safe(GameTime_GetTime, true))
 		if type(text) == "string" and text ~= "" then return text end
@@ -575,7 +579,7 @@ local function Badge(key)
 	badge:SetSize(BADGE, BADGE)
 	badge:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 4)
 	badge:EnableMouse(false)
-	badge:SetAlpha(0)
+	badge:SetAlpha(0) -- (the driver brings it with the mouse)
 	badge.disc = badge:CreateTexture(nil, "BACKGROUND")
 	badge.disc:SetTexture(MEDIA .. "BadgeDisc")
 	badge.disc:SetAllPoints()
@@ -636,7 +640,7 @@ local function Overlay(key)
 	if type(target) ~= "table" or not badge or InCombatLockdown() then return end
 	local width = Clean(Safe(target.GetWidth, target)) or BADGE
 	local height = Clean(Safe(target.GetHeight, target)) or BADGE
-	local scale = (BADGE + 2) / math.max(width, height, 1)
+	local scale = (BADGE + 2) / math.max(width, height, 1) -- (a touch larger than ours: its clicks cover the badge)
 	local now = Clean(Safe(target.GetScale, target)) or 1
 	if math.abs(now - scale) > 0.01 then pcall(target.SetScale, target, scale) end
 	pcall(target.ClearAllPoints, target)
@@ -699,7 +703,7 @@ end
 local function UpdateCalendar()
 	local badge = badges.calendar
 	if not badge then return end
-	badge.day:SetText(tonumber(date("%d")) or "")
+	badge.day:SetText(tonumber(date("%d")) or "") -- (no leading zero)
 	local invites = C_Calendar and Clean(Safe(C_Calendar.GetNumPendingInvites)) or Clean(Safe(_G.CalendarGetNumPendingInvites))
 	badge.dot:SetShown(type(invites) == "number" and invites > 0)
 end
@@ -770,6 +774,7 @@ local function MakeFly()
 	badge:EnableMouse(true)
 	badge:RegisterForClicks("LeftButtonUp")
 	badge:SetScript("OnClick", function(self)
+		-- (other addons' buttons are moved and shown: not in a fight)
 		if InCombatLockdown() then return end
 		flyOpen = not flyOpen and #AddonButtons() > 0
 		flyLast = GetTime()
@@ -951,6 +956,7 @@ function ns.PlaceFly()
 	fly.edge:SetPoint("BOTTOMRIGHT", fly, "BOTTOMRIGHT", px, -px)
 	fly.lines:Fit()
 	MaskFly(round)
+	-- (radii: the hole at reach, its dark edge a pixel inside, the disc 1.5 px out: the hairline between)
 	if round then
 		fly.hole:SetSize(reach / HOLE_AT, reach / HOLE_AT)
 		fly.holeEdge:SetSize((reach - px) / HOLE_AT, (reach - px) / HOLE_AT)
@@ -982,7 +988,8 @@ end
 -- Under the mouse ------------------------------------------------------------------------------------------------
 
 local function Near()
-	if Over(Minimap, 24, 24, 24, 24) or Over(MinimapCluster) or Over(info) then return true end
+	-- (24 px all round the map: IsMouseOver's offsets move each edge up or right)
+	if Over(Minimap, 24, -24, -24, 24) or Over(MinimapCluster) or Over(info) then return true end
 	for _, badge in pairs(badges) do if Over(badge) then return true end end
 	return fly ~= nil and fly:IsShown() and Over(fly)
 end
@@ -1022,6 +1029,7 @@ local function Init()
 		local now = GetTime()
 		if Near() then lastNear = now end
 		local want = (now - lastNear < LINGER) and 1 or 0
+		-- (coming into view: tidied first, so nothing the game showed again flashes; reparenting waits out a fight)
 		if want == 1 and hover == 0 and not InCombatLockdown() then Gather() end
 		hover = ns.Approach(hover, want, elapsed, HOVER_IN, HOVER_OUT)
 		-- (every pass: the game shows some of its pieces again on its own)
@@ -1069,7 +1077,7 @@ function ns.CompassOpen() return flyOpen and true or false end
 -- (Fade.lua: the ring, the letters and the band fade as the compass comes and goes; the map itself never does)
 local decorAlpha
 function ns.CompassDecor(alpha)
-	alpha = math.floor(alpha * 100 + 0.5) / 100
+	alpha = math.floor(alpha * 100 + 0.5) / 100 -- (hundredths: no work for nothing)
 	if alpha == decorAlpha then return end
 	decorAlpha = alpha
 	if deco then pcall(deco.SetAlpha, deco, alpha) end

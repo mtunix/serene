@@ -15,7 +15,8 @@ local ADDON, ns = ...
 --   Chat.lua     the chat in glass: a soft dark backdrop behind each message only, fading with it; no window, no
 --                buttons until the mouse comes; the game's own lines ("[1. General] [Name]: text").
 --   Minimap.lua  the compass: the minimap in a thin ring with degree ticks and N/E/S/W, the zone, where you
---                stand and the time under it; its buttons under the mouse. Hidden in cities and towns.
+--                stand and the time under it; its buttons under the mouse. Under the mouse, or always outside
+--                cities and towns.
 --   Fade.lua     the interface away when you don't need it: action bars, your portrait, the minimap, buffs, the
 --                menu, bags and experience; back on hover, in a fight, with a target, while casting...
 --   TopBar.lua   the top bar: zone, experience, money, bags, gear, latency, the time... in one glass band.
@@ -67,10 +68,10 @@ local ADDON, ns = ...
 -- /serene for the switches.
 
 ns.DEFAULTS = {
-	chat = true,
-	minimap = true,
-	fade = true,
-	tracker = true,
+	chat = true,     -- the chat in glass (Chat.lua; a reload to switch)
+	minimap = true,  -- the compass (Minimap.lua; a reload to switch)
+	fade = true,     -- what isn't needed fades away (Fade.lua)
+	tracker = true,  -- the quest tracker hidden, a key brings it back (Tracker.lua)
 	loot = true,     -- loot and rolls in few lines (ChatLoot.lua)
 	quiet = true,    -- friends and guild coming online / going offline: quiet and short
 	gains = true,    -- money, experience and reputation: one quiet line per fight
@@ -78,8 +79,8 @@ ns.DEFAULTS = {
 	group = false,   -- one speaker's lines in a row: the name once (off: names on every line read clearer)
 	hints = true,    -- a gold glow on action buttons worth pressing now (food when not Well Fed, a missing class buff)
 	hintReveal = "button", -- what a glow brings back: "none", "button", "bar" or "bars" (all of them)
-	hintFood = true,
-	hintBuffs = true,
+	hintFood = true,  -- the food rule: food that makes you Well Fed, when you are not
+	hintBuffs = true, -- what your class keeps up (armors, auras, poisons...), when missing
 	hintLast = {},   -- per character: the spell of a group (armor, blessing, aspect...) used last
 	actionBars = true, -- the action bars made calm (ActionBars.lua)
 	barKeys = true,    -- the keys on the buttons
@@ -162,7 +163,7 @@ ns.DEFAULTS = {
 	unitBorder = "line", -- "line": a hairline of the game's gold around the card and the portrait; "none": glass only
 	menuBar = true,    -- the micro menu and the bag bar made calm (MenuBar.lua; a reload to switch)
 	barEmpty = false,  -- empty slots shown too (off: see-through, shown faintly while dragging)
-	vendor = true,   -- merchants: a "Stack" button and Alt-click to buy a full stack -- the food rule: food that makes you Well Fed, when you are not
+	vendor = true,   -- merchants: a "Stack" button and Alt-click to buy a full stack (Merchant.lua)
 	card = true,     -- a player's card on hover over their name in the chat
 	chatArrows = true, -- the line to write in: arrow keys move in it (Ctrl: by word), Up/Down bring back what you sent
 	chatRoom = true,   -- the line to write in's room used by the messages while nobody writes; they glide up as you write
@@ -219,7 +220,7 @@ function ns.Pixel(region)
 	local _, height = GetPhysicalScreenSize()
 	local scale = region and ns.Clean(ns.Safe(region.GetEffectiveScale, region)) or 1
 	if type(height) ~= "number" or height <= 0 or type(scale) ~= "number" or scale <= 0 then return 1 end
-	return 768 / height / scale
+	return 768 / height / scale -- (the interface is 768 units high at scale 1)
 end
 
 -- A hairline just inside a frame's edges: four textures, one pixel each. Returns them (to colour or show again).
@@ -291,6 +292,7 @@ function ns.Approach(current, target, elapsed, fadeIn, fadeOut)
 	return math.max(target, current - (elapsed or 0) / (fadeOut > 0 and fadeOut or 0.001))
 end
 
+-- A switch: on or off (the default until the saved settings are loaded).
 function ns.On(key)
 	local db = ns.db
 	if not db then return ns.DEFAULTS[key] end
@@ -310,7 +312,7 @@ function ns.Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff9ad0c2Serene|r: " .. text)
 end
 
--- Saved settings, missing keys filled from the defaults.
+-- Saved settings, missing keys filled from the defaults (into nested tables too).
 local function Fill(into, from)
 	for key, value in pairs(from) do
 		if type(value) == "table" then
@@ -332,7 +334,9 @@ loader:SetScript("OnEvent", function(self, event, name)
 		if name ~= ADDON then return end
 		SereneDB = type(SereneDB) == "table" and SereneDB or {}
 		Fill(SereneDB, ns.DEFAULTS)
+		-- ("glow" isn't one of hintReveal's choices: the nearest is "none")
 		if SereneDB.hintReveal == "glow" then SereneDB.hintReveal = "none" end
+		-- (once: a name on every line reads clearer)
 		if not SereneDB.ungrouped then SereneDB.group, SereneDB.ungrouped = false, true end
 		-- (the top bar now rests like the rest of the interface: under the mouse only)
 		if not SereneDB.topHover then SereneDB.topShow, SereneDB.topHover = "hover", true end
@@ -341,6 +345,7 @@ loader:SetScript("OnEvent", function(self, event, name)
 		ns.db = SereneDB
 		return
 	end
+	-- (PLAYER_LOGIN: every module's init once, in TOC order; one failing doesn't stop the rest)
 	self:UnregisterAllEvents()
 	for _, module in ipairs(ns.modules) do
 		if module.init then
@@ -548,10 +553,10 @@ SlashCmdList.SERENE = function(msg)
 		ns.Print(("rest mode after %d seconds idle"):format(ns.db.idleAfter))
 	elseif a == "barstyle" and (b == "classic" or b == "glass" or b == "round") then
 		ns.db.barStyle = b
-		ns.db.barStyleSame = true
+		ns.db.barStyleSame = true -- (the word is every bar's look)
 		ns.Print("action bars: " .. b .. (InCombatLockdown() and " (after the fight)" or ""))
 	elseif a == "swingsize" and tonumber(b) then
-		ns.db.swingSize = math.max(50, math.min(300, math.floor(tonumber(b) / 10 + 0.5) * 10))
+		ns.db.swingSize = math.max(50, math.min(300, math.floor(tonumber(b) / 10 + 0.5) * 10)) -- (in tens, as the slider)
 		ns.Print(("swing timer: %d%%"):format(ns.db.swingSize))
 	elseif a == "aurasmove" and ns.AuraMove then
 		return ns.AuraMove()

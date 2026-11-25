@@ -49,7 +49,7 @@ local function ClassFile(localized)
 			end
 		end
 	end
-	return (localized:upper():gsub("%s", ""))
+	return (localized:upper():gsub("%s", "")) -- (not in the game's lists: the English token, as a guess)
 end
 
 local function ClassColor(file)
@@ -73,7 +73,7 @@ local function Learn(name, facts)
 	for field, value in pairs(facts) do
 		if value ~= nil then card[field] = value end
 	end
-	if facts.level then card.seen = GetTime() end
+	if facts.level then card.seen = GetTime() end -- (the card's "seen ... ago" is the level's age)
 end
 
 local function FromGUID(name, guid)
@@ -91,7 +91,7 @@ local function FromUnit(unit)
 	local guild, rank = Safe(GetGuildInfo, unit)
 	local level = Clean(Safe(UnitLevel, unit))
 	Learn(name, {
-		level = (type(level) == "number" and level ~= 0) and level or nil,
+		level = (type(level) == "number" and level ~= 0) and level or nil, -- (0: not known yet)
 		class = Text(className), classFile = Text(classFile), race = Text(Safe(UnitRace, unit)),
 		guild = Text(guild), rank = Text(rank),
 	})
@@ -100,6 +100,7 @@ end
 local function FromGroup()
 	local raid = Clean(Safe(IsInRaid))
 	local count = Number(Safe(GetNumGroupMembers)) or 0
+	-- (party1 to party4: a party's count includes you, who have no party unit)
 	for at = 1, raid and count or math.min(count, 4) do
 		FromUnit((raid and "raid" or "party") .. at)
 	end
@@ -156,7 +157,7 @@ local function GroupFacts(name, card)
 	FromUnit(unit)
 	card.group = unit ~= "player"
 	card.zone = raidIndex and Text(select(7, Safe(GetRaidRosterInfo, raidIndex))) or MapName(unit)
-	card.online = Clean(Safe(UnitIsConnected, unit)) ~= false
+	card.online = Clean(Safe(UnitIsConnected, unit)) ~= false -- (unknown is not offline)
 end
 
 local function GuildFacts(name, card)
@@ -230,6 +231,7 @@ local function Show(owner, name, lineID)
 			tip:AddLine(MUTED .. (FRIENDS_LIST_OFFLINE or "Offline") .. "|r")
 		else
 			local zone = live.zone
+			-- (a zone from /who, trusted for five minutes: people move)
 			if not zone and card.zone and card.zoneAt and GetTime() - card.zoneAt < 300 then zone = card.zone end
 			if zone then tip:AddLine(SOFT .. zone .. "|r") end
 		end
@@ -252,6 +254,7 @@ function ns.PlayerCard(owner, link)
 	if not payload then return false end
 	local name, lineID = payload:match("^([^:]+):?(%d*)")
 	if not name or name == "" then return false end
+	-- (a card that fails to build: no card, never an error on hover)
 	local ok, shown = pcall(Show, owner, name, tonumber(lineID))
 	return ok and shown or false
 end
@@ -272,7 +275,7 @@ listener:SetScript("OnEvent", function(_, event, ...)
 	elseif event == "CHAT_MSG_SYSTEM" then Safe(FromWhoLine, (...))
 	elseif event == "PLAYER_GUILD_UPDATE" then
 		if C_GuildInfo and C_GuildInfo.GuildRoster then Safe(C_GuildInfo.GuildRoster) end
-	else
+	else -- (a chat line)
 		local sender, guid = select(2, ...), select(12, ...)
 		Safe(FromGUID, Text(sender), guid)
 	end

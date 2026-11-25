@@ -11,6 +11,7 @@ for y in range(H):
         a = max(0.0, min(1.0, a))
         a = a * a * (3 - 2 * a)  # smoothstep
         out += bytes((255, 255, 255, int(round(255 * a))))
+# (an uncompressed 32-bit TGA, type 2: descriptor 40 is 8 alpha bits, rows from the top)
 hdr = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, W, H, 32, 40)
 for path in sys.argv[1:]:
     open(path, 'wb').write(hdr + out)

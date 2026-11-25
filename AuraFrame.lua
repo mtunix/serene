@@ -28,12 +28,12 @@ local GOLD = { 1, 0.82, 0.35 }
 local SOFT, MUTED, LINE = ns.SOFT_RGB, ns.MUTED_RGB, ns.LINE
 local GREY = { 0.52, 0.52, 0.55 }
 local EDGE = { 0, 0, 0, 0.85 }   -- a dark hairline outside the ring: it stands out on bright ground
-local TRIM = 0.08
+local TRIM = 0.08                -- the icon's baked-in edge trimmed away, on each side
 local GAP = 5                    -- between two icons
 local ROW_GAP = 5                -- between two rows
 local SMALL_GAP = 4
 local TIME_GAP = 2               -- between an icon and its time under it
-local ON_EDGE = 1
+local ON_EDGE = 1                -- the time on the icon: this far above its lower edge
 local LOW = 10                   -- the last seconds: the time in soft white
 local GHOST_DIM = 0.8            -- (a missing buff: its own icon in grayscale, a little dimmed)
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -86,6 +86,7 @@ local function Style()
 		time = "outline", on = false, font = 0, edge = true, dim = true }
 end
 
+-- (in a fight by either sign: your auras can't be read then, and secure frames can't be touched)
 local function Fighting()
 	return InCombatLockdown() or Clean(Safe(UnitAffectingCombat, "player")) and true or false
 end
@@ -389,10 +390,11 @@ local function AddGroups(c, filter, list)
 			initializeFrame = Maker(kind),
 			candidateFilters = Filters(kind),
 			sortMethod = SORT_BY, sortDirection = SORT_WAY,
-			layout = Layout(kind, order, index > 1),
+			layout = Layout(kind, order, index > 1), -- (TopRowWidth counts on this)
 		})
 		if not ok then
 			problem = problem or (kind .. ": " .. tostring(why))
+		-- (every group added, the unwanted ones switched off: a setting can bring one back without a reload)
 		elseif not Enabled(kind) then
 			pcall(c.SetAuraGroupEnabled, c, kind, false)
 		end
@@ -419,7 +421,7 @@ local function PlaceHolders()
 	elseif _G.BuffFrame then
 		buffs:SetPoint("TOPRIGHT", _G.BuffFrame, "TOPRIGHT", 0, 0)
 	else
-		buffs:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -205, -13)
+		buffs:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -205, -13) -- (about where the game's buff frame sits)
 	end
 	Flow(buffs, "TOPRIGHT", FLOW and FLOW.Left)
 	pcall(buffs.SetFlowLayoutMaximumLineSize, buffs, perRow * (Element("full") + GAP))
@@ -536,8 +538,9 @@ local function LearnDispels()
 	local _, class = Safe(UnitClass, "player")
 	for _, def in ipairs(DISPELS[Clean(class) or ""] or {}) do
 		local id = def[1]
-		local known = def.pet and Clean(Safe(IsSpellKnown, id, true))
+		local known = def.pet and Clean(Safe(IsSpellKnown, id, true)) -- (true: the pet's spellbook)
 			or Clean(Safe(IsPlayerSpell, id)) or Clean(Safe(IsSpellKnown, id))
+		-- (by name: known at any rank, whatever that rank's id)
 		if not known and not def.pet and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellInfo then
 			local name = Clean(Safe(C_Spell.GetSpellName, id))
 			known = name and type(Clean(Safe(C_Spell.GetSpellInfo, name))) == "table"
@@ -593,7 +596,7 @@ local function GhostIcon(index)
 	local b = ghostIcons[index]
 	if b then return b end
 	b = CreateFrame("Button", "SereneAuraGhost" .. index, ghostRow, "SecureActionButtonTemplate")
-	b:RegisterForClicks("AnyUp", "AnyDown")
+	b:RegisterForClicks("AnyUp", "AnyDown") -- (both: it acts on whichever the game's key-down setting says)
 	b.ring = b:CreateTexture(nil, "BACKGROUND", nil, -1)
 	b.ring:SetAllPoints()
 	b.icon = b:CreateTexture(nil, "ARTWORK")
@@ -673,7 +676,7 @@ local function Mover(label, corner, save)
 	m:SetScript("OnDragStart", function(self) self:StartMoving() end)
 	m:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
-		pcall(self.SetUserPlaced, self, false)
+		pcall(self.SetUserPlaced, self, false) -- (not kept by the game's own layout: Serene saves the place)
 		save(self)
 		PlaceHolders()
 	end)
@@ -785,7 +788,7 @@ local function Apply()
 		return
 	end
 	pending = false
-	wipe(curves)
+	wipe(curves) -- (curves for settings no longer in use let go)
 	PlaceHolders()
 	UpdateGroups(buffs, BUFF_GROUPS)
 	UpdateGroups(debuffs, DEBUFF_GROUPS)
@@ -886,6 +889,6 @@ function ns.AuraFrameDebug()
 		#counts > 0 and table.concat(counts, ", ") or "counts secret in a fight", #ghosts, short,
 		#kinds > 0 and table.concat(kinds, ", ") or "none", problem and (" — problem: " .. problem) or ""))
 end
-ns.AuraProbe = ns.AuraFrameDebug
+ns.AuraProbe = ns.AuraFrameDebug -- (/serene debug auras)
 
 table.insert(ns.modules, { init = Init, refresh = Refresh })

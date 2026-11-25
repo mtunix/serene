@@ -59,7 +59,7 @@ end
 local function Changed()
 	local page, bonus = Page()
 	if page == lastPage and bonus == lastBonus then return end
-	local first = lastPage == nil
+	local first = lastPage == nil -- (the first reading, at login: nothing to fade from)
 	lastPage, lastBonus = page, bonus
 	ShowMark(page, bonus)
 	if first or not ns.On("barPages") then return end

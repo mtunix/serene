@@ -21,7 +21,7 @@ local HOUR = "|cff7d7d7d"
 local URL = "|cff6cb4ff"
 local BLANK = "Interface\\AddOns\\Serene\\Media\\Blank"
 local GROUP_TIME = 120     -- seconds within which one speaker's lines are a group
-local FADE_IN = 0.3
+local FADE_IN = 0.3        -- seconds a new line takes to fade in
 local HELD_MOST = 80       -- channel lines kept per window during a fight
 local INK = { 0.035, 0.04, 0.05 }
 local GOLD = { 1, 0.82, 0.35 }
@@ -44,6 +44,7 @@ local function StampPattern(format)
 	if type(format) ~= "string" or format == "none" or format == "" then return nil end
 	local pattern = stampPatterns[format]
 	if pattern then return pattern end
+	-- (hours as one or two digits, minutes and seconds as two, AM/PM as a word, any other code loosely)
 	pattern = format:gsub("%%(.)", function(code)
 		if code == "H" or code == "I" or code == "k" or code == "l" then return "\1" end
 		if code == "M" or code == "S" then return "\2" end
@@ -61,6 +62,7 @@ end
 local TAGS = { GUILD = "G", OFFICER = "O", PARTY = "P", RAID = "R", RAID_WARNING = "RW", INSTANCE_CHAT = "I",
 	INSTANCE = "I", BATTLEGROUND = "B" }
 
+-- (the game's own word for it, else the English one anywhere in the tag)
 local function Says(shown, global, english)
 	local name = _G[global]
 	return (type(name) == "string" and shown == name) or shown:find(english, 1, true) ~= nil
@@ -106,6 +108,7 @@ local function Indent(frame, words)
 	local width = Clean(Safe(ruler.GetStringWidth, ruler))
 	ruler:SetText("")
 	if type(width) ~= "number" or width <= 4 then return nil end
+	-- (a few pixels less: the real space before it)
 	return " |T" .. BLANK .. ":1:" .. math.floor(width - 3 + 0.5) .. "|t"
 end
 
@@ -134,6 +137,7 @@ local function Group(frame, entry, hour, rest)
 	end
 	local now = GetTime()
 	local group = groups[frame]
+	-- (the line before this one is the group's last: nothing came in between)
 	if group and group.who == who and group.kind == kind and now - group.at < GROUP_TIME
 		and Newest(frame, 2) == group.last then
 		local indent = Indent(frame, head)
@@ -162,6 +166,7 @@ function ns.ChatFadeIn(words)
 	if not at then return nil end
 	local age = GetTime() - at
 	if age < FADE_IN then return math.max(0.05, age / FADE_IN) end
+	-- (full once, then left to the game's own fade)
 	if not settled[words] then
 		settled[words] = true
 		return 1
@@ -172,6 +177,7 @@ end
 local function Came(words)
 	local now = GetTime()
 	added[words] = now
+	-- (long faded in by then: swept at most every 5 seconds)
 	if now - purgedAt > 5 then
 		purgedAt = now
 		for key, at in pairs(added) do
@@ -185,6 +191,7 @@ end
 local function OnAdded(frame, text)
 	if type(text) ~= "string" or IsSecret(text) then return end
 	local entry = Newest(frame)
+	-- (only the line just added, as the game wrote it: one another hook changed is left alone)
 	if not entry or entry.message ~= text then return end
 	local new = text
 	if ns.On("tags") then new = ShortTags(new) end
@@ -256,10 +263,11 @@ local function CopyBox(text, title)
 			end
 		end)
 		edit:SetScript("OnKeyDown", function(_, key)
+			-- (hidden a moment later, once the game has copied the words)
 			if key == "C" and IsControlKeyDown() then C_Timer.After(0.15, function() box:Hide() end) end
 		end)
 		box.edit = edit
-		table.insert(UISpecialFrames, "SereneCopyBox")
+		table.insert(UISpecialFrames, "SereneCopyBox") -- (Esc closes it, as it does the game's windows)
 	end
 	box.text = text
 	box.title:SetText(title or "Copy")
@@ -341,6 +349,7 @@ local function MakeSheet()
 	edit:SetMultiLine(true)
 	edit:SetAutoFocus(false)
 	edit:SetFontObject(ChatFontNormal or GameFontHighlight)
+	-- (0: no limit, so a long history isn't cut off)
 	if edit.SetMaxLetters then edit:SetMaxLetters(0) end
 	if edit.SetMaxBytes then edit:SetMaxBytes(0) end
 	edit:SetWidth(640 - 30)
@@ -348,7 +357,7 @@ local function MakeSheet()
 	scroll:SetScrollChild(edit)
 	edit:SetScript("OnEscapePressed", function() sheet:Hide() end)
 	edit:SetScript("OnTextChanged", function(self, typed)
-		if typed then self:SetText(sheet.text or "") end
+		if typed then self:SetText(sheet.text or "") end -- (read only: anything typed is undone)
 	end)
 	-- (the field follows the cursor; the wheel scrolls)
 	if _G.ScrollingEdit_OnCursorChanged and _G.ScrollingEdit_OnUpdate then
@@ -392,6 +401,7 @@ local function CopyHistory(frame)
 	sheet:Show()
 	sheet.edit:SetFocus()
 	sheet.edit:SetCursorPosition(#sheet.text)
+	-- (next frame: the scroll range is known once the words are laid out)
 	C_Timer.After(0, function()
 		sheet.scroll:SetVerticalScroll(sheet.scroll:GetVerticalScrollRange() or 0)
 	end)
@@ -414,6 +424,7 @@ local function CopyButton()
 		end
 	end)
 	button:SetScript("OnLeave", function() if ns.HideTip then ns.HideTip() end end)
+	-- (one of the chat's kept buttons: under the mouse, placed and dressed with them)
 	table.insert(chat.buttons, "SereneChatCopyButton")
 	if ns.ShellDress then Safe(ns.ShellDress) end
 end
@@ -448,8 +459,9 @@ end
 local function Words(text)
 	return (text:gsub("%S+", function(word)
 		local lower = word:lower()
+		-- (a word holding an escape code is part of the game's markup: left alone)
 		if not (lower:find("^https?://") or lower:find("^www%.[%w%-]+%.%a")) or word:find("|", 1, true) then return nil end
-		local tail = word:match("[%.,!%?%)%]\"']+$") or ""
+		local tail = word:match("[%.,!%?%)%]\"']+$") or "" -- (the sentence's punctuation, not the address's)
 		local address = word:sub(1, #word - #tail)
 		if #address < 8 then return nil end
 		return URL .. "|Haddon:Serene:url:" .. address .. "|h" .. address .. "|h|r" .. tail
@@ -509,7 +521,7 @@ local function Hold(frame, event, ...)
 	if replaying or not fighting or not (ns.On("chat") and ns.On("calm")) or type(frame) ~= "table" then return false end
 	local list = held[frame] or {}
 	held[frame] = list
-	list[#list + 1] = { event = event, n = select("#", ...), ... }
+	list[#list + 1] = { event = event, n = select("#", ...), ... } -- (n: the arguments hold nils)
 	if #list > HELD_MOST then table.remove(list, 1) end
 	return true
 end
@@ -517,8 +529,8 @@ ns.ChatHold = Hold -- (tests)
 
 -- The fight over: each window's waiting lines, through the game's own handling (its filters, its look).
 local function Replay()
-	if fighting then return end
-	replaying = true
+	if fighting then return end -- (a new fight began meanwhile: they wait for its end)
+	replaying = true -- (Hold lets them through)
 	for frame, list in pairs(held) do
 		local handler = frame.GetScript and frame:GetScript("OnEvent")
 		for _, each in ipairs(list) do
@@ -564,7 +576,7 @@ local function Init()
 		fighting = event == "PLAYER_REGEN_DISABLED"
 		if not fighting then C_Timer.After(0.5, Replay) end
 	end)
-	fighting = InCombatLockdown() and true or false
+	fighting = InCombatLockdown() and true or false -- (a /reload in a fight)
 	pcall(CopyButton)
 end
 

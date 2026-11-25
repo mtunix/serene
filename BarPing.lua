@@ -31,7 +31,9 @@ local function Frame(button)
 	if f then return f end
 	f = CreateFrame("Frame", nil, button)
 	f:EnableMouse(false)
+	-- (above the button's glows, ActionBars' and Hints', which sit 5 over it)
 	f:SetFrameLevel((Clean(Safe(button.GetFrameLevel, button)) or 1) + 7)
+	-- (seen on a faded bar too)
 	pcall(f.SetIgnoreParentAlpha, f, true)
 	f.ring = f:CreateTexture(nil, "OVERLAY")
 	f.ring:SetAllPoints()
@@ -99,6 +101,7 @@ local function Play(button)
 	f.icon:SetAllPoints(icon)
 	f.icon:SetTexture(Clean(Safe(icon.GetTexture, icon)))
 	pcall(f.icon.SetTexCoord, f.icon, Safe(icon.GetTexCoord, icon))
+	-- (the mask taken off first: the button's look may have changed since its last ping)
 	pcall(f.icon.RemoveMaskTexture, f.icon, f.mask)
 	if style == "round" then pcall(f.icon.AddMaskTexture, f.icon, f.mask) end
 	f.icon:SetShown(ghost and true or false)
@@ -128,6 +131,7 @@ local function Look()
 			else
 				r.seen = now
 			end
+		-- (nil, unknown: the record kept as it is, never taken for an end)
 		elseif on == false and r then
 			running[slot] = nil
 			if now - r.at >= least and now - r.seen <= SEEN_GAP and r.what == What(slot) then Play(button) end

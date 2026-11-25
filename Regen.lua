@@ -35,6 +35,7 @@ local function Mana()
 	return Clean(Safe(UnitPower, "player", MANA)), Clean(Safe(UnitPowerMax, "player", MANA))
 end
 
+-- (the power type secret in a fight: taken as mana; only a known other kind, bear or cat, hides the line)
 local function ShowsMana()
 	local kind = Clean(Safe(UnitPowerType, "player"))
 	return kind == nil or kind == MANA
@@ -113,6 +114,7 @@ local function Place()
 	local px = ns.Pixel(bar)
 	local reach = Reach(px)
 	local width = (Clean(Safe(bar.GetWidth, bar)) or 0) + reach
+	-- (asked every frame: placed again only when the bar, the portrait or the scale has moved)
 	if line.px == px and line.reach and math.abs(line.reach - reach) < 0.25 and line.total == width then return width end
 	line.px, line.reach, line.total = px, reach, width
 	line:ClearAllPoints()
@@ -164,12 +166,13 @@ end
 
 local function Spent()
 	startedAt = Now()
-	castAt, dropAt = -math.huge, -math.huge
+	castAt, dropAt = -math.huge, -math.huge -- (the pair used up: it starts the line once)
 	if line and ns.On("manaRegen") then line:Show() end
 end
 
 -- Events ---------------------------------------------------------------------------------------------------------------
 
+-- (a cast: the unit, its cast id, its spell id; a power update: the unit, the power's token)
 local function OnEvent(_, event, unit, a, b)
 	if event == "UNIT_SPELLCAST_SUCCEEDED" then
 		if Clean(unit) ~= "player" then return end
@@ -188,10 +191,10 @@ local function OnEvent(_, event, unit, a, b)
 			dropAt = Now()
 			if dropAt - castAt <= PAIR then Spent() end
 		end
-		lastMana = mana
+		lastMana = mana -- (nil while the mana is secret: casts then go by their cost)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		lastMana = Mana()
-		if not bar then ns.RegenFind() end
+		if not bar then ns.RegenFind() end -- (no power bar at login: looked for again)
 	end
 end
 
@@ -220,6 +223,7 @@ end
 local function Init()
 	local events = CreateFrame("Frame")
 	pcall(events.RegisterEvent, events, "PLAYER_ENTERING_WORLD")
+	-- (only the player's where the client can filter them; else all of them, sorted in OnEvent)
 	for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT" }) do
 		if not (events.RegisterUnitEvent and pcall(events.RegisterUnitEvent, events, event, "player")) then
 			pcall(events.RegisterEvent, events, event)

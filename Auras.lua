@@ -2,9 +2,9 @@ local _, ns = ...
 local Safe, Clean = ns.Safe, ns.Clean
 
 -- Buffs and debuffs made calm: the game's own aura buttons (yours at the top of the screen, your weapons' enchants,
--- and the small ones on your target's and focus's frames), nothing new beside them. Edit Mode still places them, sizes
--- them and sets how they wrap; the game still fills them, counts them down, sorts them; a right click still cancels
--- one of yours. Only looks change:
+-- the small ones on your target's and focus's frames, and your debuffs on enemies' nameplates), nothing new beside
+-- them. Edit Mode still places them, sizes them and sets how they wrap; the game still fills them, counts them down,
+-- sorts them; a right click still cancels one of yours. Only looks change:
 --   - the icon round, like the unit frames' portraits, or square (its baked-in edge trimmed away either way);
 --   - around it a hairline (one pixel, or two or three): the game's gold, soft, for a buff; for a debuff the game's
 --     own border made that line, in a quieter shade of its colour for what it is (magic blue, curse violet, disease
@@ -14,8 +14,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 --     outlined thinly (the quieter), or on a little pill of dark glass, or not shown; under the icon (the game's
 --     place) or on its lower edge; its size chosen or the game's; the count in Serene's warm white;
 --   - the arrow that folds your buffs away (the game's) only under the mouse.
--- Your own buffs and debuffs go to Serene's own frame instead (AuraFrame.lua) unless the game's is chosen; then this
--- dresses the target's and focus's only.
+-- Your own buffs and debuffs go to Serene's own frame instead (AuraFrame.lua) unless the game's is chosen; otherwise
+-- this dresses only the others' (target, focus, nameplates).
 -- Each look is chosen on Serene's page ("Buffs") and applied at once.
 -- Nothing protected is touched (no frame moved, nothing written into the game's tables): all of it is safe in a fight,
 -- and it reads nothing the game keeps secret there (it passes the game's colours on without looking at them when it
@@ -63,7 +63,7 @@ do
 					lastTiming[self] = kept
 				end
 				if not kept[name] then kept.order[#kept.order + 1] = name end
-				kept[name] = { name, n = select("#", ...) + 1, ... }
+				kept[name] = { name, n = select("#", ...) + 1, ... } -- (n: nil arguments kept, # would drop them)
 				local seen = seenCalls[self] or {}
 				seenCalls[self] = seen
 				seen[name] = (seen[name] or 0) + 1
@@ -72,6 +72,7 @@ do
 		for _, name in ipairs({ "Clear", "Pause", "Resume" }) do
 			if type(methods[name]) == "function" then
 				hooksecurefunc(methods, name, function(self)
+					-- (a cleared swirl's timing forgotten, so Replay can't bring it back)
 					if name == "Clear" then lastTiming[self] = nil end
 					local seen = seenCalls[self] or {}
 					seenCalls[self] = seen
@@ -96,6 +97,7 @@ local function Replay(from, to)
 end
 
 -- A texture set smooth, not snapped to pixels.
+-- (never a "TRILINEAR" filter here: it crashes this client on login)
 local function Smooth(texture, file)
 	if not pcall(texture.SetTexture, texture, file, "CLAMP", "CLAMP") then
 		pcall(texture.SetTexture, texture, file)
@@ -140,11 +142,11 @@ local UNIT_GLOBALS = { { "TargetFrameBuff", 32 }, { "TargetFrameDebuff", 16 }, {
 local UPDATES = { "Update", "UpdateAuraButtons", "UpdateAuras", "UpdateGridLayout", "RefreshAuras" }
 
 local dressed = {}    -- button -> its parts (kept here, never on the game's button)
-local count = { player = 0, unit = 0, plate = 0, borders = 0 }
+local count = { player = 0, unit = 0, plate = 0, borders = 0 } -- buttons dressed, by kind (for /serene debug)
 local holding = false -- (Serene's own calls, not heard by its hooks)
-local pending = false
+local pending = false -- (a scan already asked for on the next frame)
 local active, onUnits, onPlayer, onPlates = false, false, true, false
-local hookedObjects = {}
+local hookedObjects = {} -- (hooks can't be removed: each object hooked once)
 
 local function IsRegion(value)
 	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
@@ -159,6 +161,7 @@ local function IsFontString(region)
 end
 
 -- A part of a button, by its key or the older global name.
+-- (rawget: some of the game's frames have an __index metatable)
 local function Part(button, keys, suffix, check)
 	for _, key in ipairs(keys) do
 		local part = rawget(button, key)
@@ -236,6 +239,7 @@ end
 
 -- Inside a frame the game keys "Auras" (the newer unit frames) anything is an aura: its parts found by their shape when
 -- their keys say nothing. The icon: its largest square texture (its own, or one frame down); the count: a number.
+-- (a size kept secret, in a fight, counts as no area at all)
 local function Area(region)
 	local width, height = Clean(Safe(region.GetWidth, region)), Clean(Safe(region.GetHeight, region))
 	if type(width) ~= "number" or type(height) ~= "number" or width <= 0 or height <= 0 then return 0, false end
@@ -413,6 +417,7 @@ local function Colour(a, border, look)
 			Tint(texture, quiet)
 			return SwipeColor(a, quiet[1], quiet[2], quiet[3])
 		end
+		-- (secret, or the game's colours chosen: its values handed back unread)
 		holding = true
 		pcall(texture.SetVertexColor, texture, raw[1], raw[2], raw[3])
 		holding = false
@@ -547,7 +552,7 @@ end
 -- The line under the ring: full when steady, dim while the ring drains over it.
 local function Track(a, look)
 	local drains = a.cooldown and a.timed and look.drain and look.ring ~= "none" and not a.gameDims
-	a.rim:SetAlpha(drains and TRACK_ALPHA / LINE[4] or 1)
+	a.rim:SetAlpha(drains and TRACK_ALPHA / LINE[4] or 1) -- (its colour already holds LINE's alpha)
 	for _, border in ipairs(a.borders) do
 		pcall(border.texture.SetAlpha, border.texture, look.ring == "none" and 0 or drains and TRACK_ALPHA or BORDER_ALPHA)
 	end
@@ -580,7 +585,8 @@ local function HookRing(a)
 	for _, method in ipairs({ "Clear", "Hide" }) do
 		if cooldown[method] then hooksecurefunc(cooldown, method, Timed(false)) end
 	end
-	-- (its timing played again on the swirl darkening the icon, each time the game sets it)
+	-- (its timing played again on the swirl darkening the icon, each time the game sets it; these hooks wrap the
+	-- shared ones at file load, so the call is already kept when they run)
 	for _, method in ipairs(TIMING) do
 		if cooldown[method] then hooksecurefunc(cooldown, method, function() pcall(Dim, a) end) end
 	end
@@ -607,6 +613,7 @@ local function Shape(a, look)
 	Smooth(a.edge, shape)
 	a.edge:SetVertexColor(EDGE[1], EDGE[2], EDGE[3], EDGE[4])
 	a.edge:SetShown(look.edge)
+	-- (sublevels: the game's border at -6 over the gold line at -7 over the dark edge at -8)
 	holding = true
 	pcall(Around, a.rim, icon, thick, -7)
 	pcall(Around, a.edge, icon, (look.ring == "none" and 0 or thick) + (a.px or 1), -8)
@@ -699,6 +706,7 @@ local function TimeLook(a, look)
 	holding = false
 	local layer, sublevel = Safe(text.GetDrawLayer, text)
 	layer, sublevel = Clean(layer) or "OVERLAY", Clean(sublevel)
+	-- (the pill just under the words; -8 is the lowest sublevel there is)
 	pcall(a.plate.SetDrawLayer, a.plate, layer, math.max(-8, (type(sublevel) == "number" and sublevel or 0) - 1))
 	a.sync()
 end
@@ -771,6 +779,7 @@ local function Dress(button, kind, loose, found)
 	-- the icon: trimmed, its own masks off (Serene's round one on, if chosen)
 	pcall(icon.SetTexCoord, icon, TRIM, 1 - TRIM, TRIM, 1 - TRIM)
 	if icon.GetNumMaskTextures then
+		-- (from the last: each removal moves the ones after it down)
 		for index = (Clean(Safe(icon.GetNumMaskTextures, icon)) or 0), 1, -1 do
 			local mask = Safe(icon.GetMaskTexture, icon, index)
 			if mask then pcall(icon.RemoveMaskTexture, icon, mask) end
@@ -1063,6 +1072,7 @@ local function QuietArrow()
 	local arrow = type(buffs) == "table" and rawget(buffs, "CollapseAndExpandButton")
 	if not IsRegion(arrow) then return end
 	local shown = -1
+	-- (nothing says when the mouse comes near: looked at ten times a second)
 	local watch = CreateFrame("Frame")
 	local wait = 0
 	watch:SetScript("OnUpdate", function(_, elapsed)
@@ -1101,7 +1111,7 @@ local function Init()
 		pcall(events.RegisterEvent, events, event)
 	end
 	pcall(events.RegisterUnitEvent, events, "UNIT_AURA", "player", "target")
-	pcall(events.RegisterUnitEvent, events, "UNIT_INVENTORY_CHANGED", "player")
+	pcall(events.RegisterUnitEvent, events, "UNIT_INVENTORY_CHANGED", "player") -- (weapon enchants)
 	events:SetScript("OnEvent", Request)
 	-- (a unit event takes two units at most: the focus on its own)
 	local focus = CreateFrame("Frame")
@@ -1419,7 +1429,6 @@ function ns.AuraHolderDump()
 	ns.Print("(all of it saved for Serene's author: /reload writes it)")
 end
 
--- /serene debug targeticons: the target frame's pictures keyed as icons that are showing now: which, its art, its size.
 -- /serene debug plates: each nameplate aura icon, whether Serene dressed it, which of the game's timing calls reached its
 -- swirl (and how often), and whether Serene's darkening swirl took them (kept in SereneDB.probePlates too).
 function ns.AuraPlatesDump()
@@ -1458,6 +1467,7 @@ function ns.AuraPlatesDump()
 	if ns.db then ns.db.probePlates = out end
 end
 
+-- /serene debug targeticons: the target frame's pictures keyed as icons that are showing now: which, its art, its size.
 function ns.AuraTargetIcons()
 	local frame = _G.TargetFrame
 	if type(frame) ~= "table" then return ns.Print("no target frame") end

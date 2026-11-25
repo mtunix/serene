@@ -115,6 +115,7 @@ end
 local function Bar(on)
 	local bar = _G.GameTooltipStatusBar
 	if type(bar) ~= "table" or not bar.SetHeight then return end
+	-- (the game's height, given back when switched off)
 	if not bar.sereneHeight then bar.sereneHeight = Clean(Safe(bar.GetHeight, bar)) or 8 end
 	pcall(bar.SetHeight, bar, on and BAR_HEIGHT or bar.sereneHeight)
 	pcall(bar.SetAlpha, bar, on and BAR_ALPHA or 1)
@@ -158,6 +159,7 @@ local function Hush(line)
 	local r, g, b = Safe(line.GetTextColor, line)
 	r, g, b = Clean(r), Clean(g), Clean(b)
 	if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return end
+	-- (white, and the game's yellow, 1 0.82 0: the near matches allow for rounding)
 	if r > 0.97 and g > 0.97 and b > 0.97 then
 		line:SetTextColor(SOFT_RGB[1], SOFT_RGB[2], SOFT_RGB[3])
 	elseif r > 0.97 and math.abs(g - 0.82) < 0.04 and b < 0.05 then
@@ -177,6 +179,7 @@ local function Noise()
 	return noise
 end
 
+-- (" (Player)" in the client's language, its pattern characters escaped)
 local PLAYER_MARK = type(_G.PLAYER) == "string" and _G.PLAYER ~= ""
 	and ("%s*%(" .. _G.PLAYER:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0") .. "%)")
 
@@ -248,7 +251,7 @@ local function Extras(tooltip)
 	local name = Clean(Safe(tooltip.GetName, tooltip))
 	if not name then return list end
 	for _, kind in ipairs({ "MoneyFrame", "Texture" }) do
-		for index = 1, 40 do
+		for index = 1, 40 do -- (numbered from 1 with no gaps: the first missing ends the list)
 			local region = _G[name .. kind .. index]
 			if not region then break end
 			list[#list + 1] = region
@@ -400,7 +403,7 @@ local function LateMoney(tooltip)
 	Late(tooltip)
 	local c = cuts[tooltip]
 	local name = Clean(Safe(tooltip.GetName, tooltip))
-	local index = Clean(rawget(tooltip, "numMoneyFrames"))
+	local index = Clean(rawget(tooltip, "numMoneyFrames")) -- (the game's own count: the coins just added are the last)
 	if c and not More() and name and type(index) == "number" and (Clean(Safe(tooltip.NumLines, tooltip)) or 0) > c.keep then
 		Fade(_G[name .. "MoneyFrame" .. index], 0)
 	end
@@ -431,6 +434,7 @@ local function GameLines(tooltip, data)
 	local said = {}
 	for _, info in ipairs(lines) do
 		if type(info) == "table" then
+			-- (a line whose words still sit in its args: brought up to leftText)
 			if info.leftText == nil and surface then Safe(surface, info) end
 			local text = Clean(info.leftText)
 			if type(text) == "string" and text:find("%S") then said[text] = true end
@@ -481,6 +485,7 @@ local function PriceWords(count)
 end
 
 local function TipInfo(tooltip)
+	-- (the info being filled right now first, as in a line call; else what the tooltip shows)
 	for _, method in ipairs({ "GetProcessingTooltipInfo", "GetPrimaryTooltipInfo" }) do
 		local info = tooltip[method] and Safe(tooltip[method], tooltip)
 		if type(info) == "table" then return info end
@@ -500,6 +505,7 @@ local function StackOf(tooltip)
 	elseif getter == "GetInventoryItem" and type(args) == "table" and _G.GetInventoryItemCount then
 		count = Clean(Safe(_G.GetInventoryItemCount, args[1], args[2]))
 	end
+	-- (not read from the slot: the count on the bag button the tooltip is shown for)
 	if type(count) ~= "number" and (getter == "GetBagItem" or getter == "GetBagItemChild" or getter == "GetInventoryItem") then
 		local owner = Safe(tooltip.GetOwner, tooltip)
 		count = type(owner) == "table" and Clean(rawget(owner, "count"))
@@ -751,6 +757,7 @@ local function Card(tooltip, data)
 	local name = Clean(Safe(UnitName, unit))
 	local written = Words(Line(tooltip, "Left", 1))
 	if type(written) == "string" and type(name) == "string" then
+		-- (its colour codes and tags such as <AFK> taken out)
 		written = written:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("%s*<[^>]*>%s*", " ")
 		written = strtrim and strtrim(written) or written:match("^%s*(.-)%s*$")
 		if written ~= "" and written:find(name, 1, true) then name = written end
@@ -763,7 +770,7 @@ local function Card(tooltip, data)
 	local faction, factionName = Safe(UnitFactionGroup, unit)
 	faction, factionName = Clean(faction), Clean(factionName)
 	local guild = Clean(Safe(GetGuildInfo, unit))
-	local female = Clean(Safe(UnitSex, unit)) == 3
+	local female = Clean(Safe(UnitSex, unit)) == 3 -- (1 unknown, 2 male, 3 female)
 
 	-- the words
 	local colors = _G.CUSTOM_CLASS_COLORS or _G.RAID_CLASS_COLORS
@@ -776,6 +783,7 @@ local function Card(tooltip, data)
 	if type(level) == "number" then
 		local difficulty = _G.GetCreatureDifficultyColor or _G.GetQuestDifficultyColor
 		levelText = level > 0 and tostring(level) or "??"
+		-- (??: a skull, in red)
 		levelColor = level > 0 and difficulty and Safe(difficulty, level) or { r = 1, g = 0.1, b = 0.1 }
 	end
 	local who = (raceName or "") .. ((raceName and className) and " " or "") .. (className or "")
@@ -787,6 +795,7 @@ local function Card(tooltip, data)
 
 	-- the lines: the card's three rows over the game's first lines, the game's others emptied, the addons' moved up
 	local game = Clean(Safe(tooltip.NumLines, tooltip)) or 0
+	-- (the data's lines are the game's: any beyond them an addon already added)
 	local said = type(data) == "table" and type(data.lines) == "table" and #data.lines
 	if said and said > 0 and said < game then game = said end
 	while (Clean(Safe(tooltip.NumLines, tooltip)) or 0) < 3 do tooltip:AddLine(" ") end
@@ -808,7 +817,7 @@ local function Card(tooltip, data)
 
 	-- the icons
 	local card = CardRegions(tooltip)
-	local race = raceFile:lower() == "scourge" and "undead" or raceFile:lower()
+	local race = raceFile:lower() == "scourge" and "undead" or raceFile:lower() -- (the atlases' word for Forsaken)
 	local gender = female and "female" or "male"
 	local raced = Paint(card.race, { "raceicon128-" .. race .. "-" .. gender, "sheet", "raceicon-" .. race .. "-" .. gender },
 		RACE_SHEET, (_G.RACE_ICON_TCOORDS or RACE_COORDS)[raceFile:upper() .. "_" .. gender:upper()]
@@ -838,6 +847,7 @@ local function OnData(tooltip, data, as)
 	local item = as == "item" or (types and kind ~= nil and kind == types.Item) or false
 	local priced, added
 	if item then priced, added = VendorPrice(tooltip, data) end
+	-- (a card only on GameTooltip; one that cannot be made falls back to quiet colours)
 	if ns.On("tooltip") and not (unit and tooltip == tip and ns.On("tipcard") and Card(tooltip, data)) then
 		Hushed(tooltip, unit)
 		if item and cuttable[tooltip] and ns.On("tipmore") then CutItem(tooltip, data, priced) end
@@ -872,7 +882,7 @@ local function Fresh(owner)
 	-- (one was seen just now, or still is: this one comes at once)
 	local recent = (tip:IsShown() and state.owner ~= nil and not state.fading) or GetTime() - state.goneAt < GRACE
 	state.owner, state.since = owner, GetTime()
-	state.world = owner == UIParent or owner == WorldFrame
+	state.world = owner == UIParent or owner == WorldFrame -- (the game's owners for units and objects in the world)
 	state.action = Named(owner, ACTION_NAMES)
 	state.wait = (state.action or Named(owner, MENU_NAMES)) and not IsShiftKeyDown() and BUTTON_WAIT or 0
 	state.redo, state.pending, state.hinted = nil, false, false
@@ -1005,6 +1015,7 @@ local function Init()
 		local tooltip = _G[name]
 		if type(tooltip) == "table" and tooltip.HookScript then
 			cuttable[tooltip] = true
+			-- (GameTooltip's own Show hook is below, with its fade)
 			if tooltip ~= tip then hooksecurefunc(tooltip, "Show", function(self) Pass(self, true) end) end
 			if Safe(tooltip.HasScript, tooltip, "OnTooltipCleared") then tooltip:HookScript("OnTooltipCleared", Uncut) end
 			tooltip:HookScript("OnHide", Uncut)
@@ -1016,7 +1027,7 @@ local function Init()
 	if _G.SetTooltipMoney then hooksecurefunc("SetTooltipMoney", LateMoney) end
 	-- (the comparison tooltips are unanchored while the game fills them, placed only after their Show: laid out
 	-- again each time they are placed, before they are drawn. A quest reward redoes this every 0.2 s, and twice
-	-- each time - the second through the game's C comparison call, which a hook on TooltipComparisonManager
+	-- each time, the second through the game's C comparison call, which a hook on TooltipComparisonManager
 	-- doesn't see; laid out a frame late, the tooltip of what you wear flickered between its full and its cut size.)
 	for tooltip in pairs(cuttable) do
 		if tooltip ~= tip and tooltip.SetPoint then
@@ -1071,7 +1082,7 @@ local function Init()
 			Redo()
 		end
 	end)
-	fighting = InCombatLockdown() and true or false
+	fighting = InCombatLockdown() and true or false -- (a reload in a fight: no REGEN_DISABLED comes)
 	Refresh()
 end
 

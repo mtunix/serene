@@ -15,7 +15,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- Three looks, one for every bar or one per bar (Settings > Action bars):
 --   classic  the game's button frame and rounded icon (as above)
 --   glass    no frame: the icon cut square on a pane of dark glass, a hairline of soft gold around it
---   round    the icon round like the portraits and the buffs, in a thin gold ring (the cooldown drains it, Cooldowns.lua)
+--   round    the icon round like the portraits and the buffs, in a thin gold ring (BarCooldowns.lua drains it)
 -- Out of range is told in every look: the icon red, the key soft red, and the glass's line or the ring soft red too.
 -- The game's own cast animations on a button (the fill sweeping across it while casting, the red of an interrupt,
 -- the turning light while a spell waits for its ground) are shaped to the look: Glass and Round clip them to their
@@ -47,7 +47,7 @@ local HALO_SCALE = 1.45 -- (Round's fallback halo before the game has GlowRound:
 local RING_AT = 36 / 128 -- GlowRound's bright line, out from its middle, over its whole size (roundglow.py)
 local FAINT = 0.4    -- a glow for something running out (a class buff, Hints.lua): still, this strong
 local FLAT = "Interface\\Buttons\\WHITE8X8" -- (a square mask: Glass clips the game's cast animations to its icon)
-ns.BAR_RIM = 2       -- the round icon's ring and the glass's line, in pixels out from the icon (Cooldowns.lua too)
+ns.BAR_RIM = 2       -- the round icon's ring and the glass's line, in pixels out from the icon (BarCooldowns.lua too)
 
 -- (the buttons and their bars' keys: Actions.lua)
 local Actions = ns.Actions
@@ -185,6 +185,7 @@ local WORDS = {
 }
 local function Short(text)
 	if type(text) ~= "string" or ns.IsSecret(text) or text == "" then return text end
+	-- (the game's dot on a button with no key, showing only range: left as it is)
 	if _G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR then return text end
 	for _, pair in ipairs(WORDS) do text = text:gsub(pair[1], pair[2]) end
 	text = text:gsub("(%a)%-", function(modifier) return modifier:upper() end)
@@ -213,7 +214,7 @@ local function KeyText(button)
 		if busy then return end
 		r, g, b = Clean(r), Clean(g), Clean(b)
 		if type(r) ~= "number" or type(g) ~= "number" then return end
-		local far = r > 0.8 and g < 0.3
+		local far = r > 0.8 and g < 0.3 -- (the game's red for out of range, not its grey or white)
 		if not rangeHooked then SetFar(button, far) end
 		local color = far and RANGE or (ns.KeyLook and ns.KeyLook(button) == "bright" and SOFT) or MUTED
 		busy = true
@@ -223,6 +224,7 @@ local function KeyText(button)
 	busy = true
 	pcall(key.SetVertexColor, key, MUTED[1], MUTED[2], MUTED[3])
 	busy = false
+	-- (the text already there, set again so the hook above shortens it)
 	pcall(key.SetText, key, (Safe(key.GetText, key)))
 end
 
@@ -317,7 +319,7 @@ local function Parts(button, icon)
 	p.glow.texture:SetTexture(MEDIA .. "Glow")
 	pcall(p.glow.texture.SetBlendMode, p.glow.texture, "ADD")
 	p.glow.texture:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
-	-- (their breath: one gentle rise and fall for every glow at once, never started over, BREATH below)
+	-- (their breath: one gentle rise and fall for every glow at once, never started over, Breathe below)
 	for _, part in ipairs({ p.glow, p.ring, p.halo }) do part:Hide() end
 	parts[button] = p
 	return p
@@ -558,6 +560,7 @@ local function Look(button)
 		end
 		pcall(icon.SetTexCoord, icon, 0, 1, 0, 1)
 	else
+		-- (45: the game's own button size, when the width can't be read)
 		local inset = (Clean(Safe(button.GetWidth, button)) or 45) * INSET
 		pcall(icon.SetPoint, icon, "TOPLEFT", button, "TOPLEFT", inset, -inset)
 		pcall(icon.SetPoint, icon, "BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
@@ -678,7 +681,8 @@ local function StripBar(bar)
 	end
 	for _, child in ipairs({ bar:GetChildren() }) do
 		local kind = child.GetObjectType and child:GetObjectType()
-		-- (the mouse's frames stay: Edit Mode's selection, the page arrows)
+		-- (the mouse's frames stay: Edit Mode's selection, the page arrows; and any frame with children of its
+		-- own, which may hold buttons)
 		if kind == "Frame" and not dressed[child] and child ~= bar.ActionBarPageNumber and child ~= bar.Selection
 			and not (child.IsMouseEnabled and child:IsMouseEnabled())
 			and not (child.GetNumChildren and child:GetNumChildren() > 0) then
@@ -817,11 +821,12 @@ local function Init()
 	events:SetScript("OnEvent", function(_, event)
 		if SLOT_EVENTS[event] then QueueSlots() end
 		if event == "PLAYER_REGEN_ENABLED" and not waiting then return end
+		-- (a slot's or page's change only needs the empty slots looked at; these few can bring buttons to dress)
 		if SLOT_EVENTS[event] and event ~= "PLAYER_ENTERING_WORLD" and event ~= "PET_BAR_UPDATE"
 			and event ~= "UPDATE_SHAPESHIFT_FORMS" then return end
 		DressAll()
 	end)
-	-- (Edit Mode moves and shows bars: dressed again once it closes)
+	-- (Edit Mode moves and shows bars: dressed again a frame after it closes, once the game has settled them)
 	local manager = _G.EditModeManagerFrame
 	if type(manager) == "table" and manager.HookScript then
 		manager:HookScript("OnHide", function() C_Timer.After(0, DressAll) end)

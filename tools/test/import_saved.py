@@ -24,6 +24,7 @@ NOT_SETTINGS = {"inv", "capture", "capturing", "unitsDump"}
 
 
 def find_saved():
+    # (the addon sits in _forever_/Interface/AddOns/Serene; WTF is beside Interface)
     wtf = os.path.normpath(os.path.join(ROOT, "..", "..", "..", "WTF", "Account"))
     found = glob.glob(os.path.join(wtf, "*", "SavedVariables", "Serene.lua"))
     if not found:

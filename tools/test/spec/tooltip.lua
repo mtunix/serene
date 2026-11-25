@@ -36,6 +36,7 @@ local function ItemTip(id, opts)
 	end
 	if opts.nolines then data.lines = nil end
 	wow.bags[0] = { size = 4, [1] = { id = id, count = opts.stack or 1 } }
+	-- (what the game answers while it builds a tooltip: the call that made it, and its data)
 	rawset(GameTooltip, "GetProcessingTooltipInfo", function()
 		return { getterName = "GetBagItem", getterArgs = { 0, 1 }, tooltipData = data }
 	end)

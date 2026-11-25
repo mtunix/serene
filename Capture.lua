@@ -37,7 +37,7 @@ local function On() return ns.db and ns.db.capturing == true end
 -- An event's arguments, saveable: secrets and frames left out (false), players' words and names replaced.
 local function Args(event, ...)
 	local args = {}
-	for index = 1, math.min(select("#", ...), 17) do
+	for index = 1, math.min(select("#", ...), 17) do -- (a chat event carries 17 at most)
 		local value = Clean((select(index, ...)))
 		local kind = type(value)
 		if kind ~= "string" and kind ~= "number" and kind ~= "boolean" then value = false end
@@ -50,6 +50,7 @@ local function Args(event, ...)
 		if text:find("|H") then shape = shape .. " |Hitem:2589::::::::60:::::|h[Linen Cloth]|h" end
 		if text:find("https?://") or text:find("www%.") then shape = shape .. " https://example.com/x" end
 		args[1] = shape
+		-- (2 and 5: the speaker's names; 12: their GUID)
 		for _, at in ipairs({ 2, 5 }) do
 			if type(args[at]) == "string" and args[at] ~= "" then args[at] = "Someone-Somerealm" end
 		end
@@ -76,6 +77,7 @@ local function OnTooltip(tooltip, data)
 	local id = Clean(data.id)
 	if type(id) ~= "number" then return end
 	local c = Store()
+	-- NOTE: c.tooltip is keyed by item id, so # isn't a count and ITEMS may never stop it
 	if c.tooltip[id] or #c.tooltip >= ITEMS then return end
 	local lines = {}
 	for index, line in ipairs(type(data.lines) == "table" and data.lines or {}) do

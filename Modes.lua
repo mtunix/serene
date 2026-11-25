@@ -8,7 +8,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- Never in a fight, never in Edit Mode.
 
 local AWAY_AFTER = 8                 -- seconds still, once the game says you are away
-local FADE_OUT, FADE_IN = 1.2, 0.25
+local FADE_OUT, FADE_IN = 1.2, 0.25  -- seconds to go away, to come back
 local CHECK_EVERY = 0.1
 
 local alpha = 1                      -- the interface's opacity as Serene holds it
@@ -26,7 +26,7 @@ end
 -- Anything you do now: the mouse moved, walking, casting, typing.
 local function Active()
 	local x, y = GetCursorPosition()
-	local moved = lastX ~= nil and (math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2)
+	local moved = lastX ~= nil and (math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2) -- (not a jitter of a pixel or two)
 	lastX, lastY = x, y
 	if moved then return true end
 	local speed = Clean(Safe(GetUnitSpeed, "player"))
@@ -94,7 +94,7 @@ local function Init()
 		lastActive = GetTime()
 		if fighting and mode then mode = nil end
 	end)
-	fighting = InCombatLockdown() and true or false
+	fighting = InCombatLockdown() and true or false -- (a reload in a fight)
 end
 
 table.insert(ns.modules, { init = Init })

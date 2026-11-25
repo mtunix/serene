@@ -20,14 +20,14 @@ local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local GOLD = { 1, 0.8, 0.3 }
 local GLOW_SCALE = 1.6   -- the glow's texture over the button's size (its ring sits on the button's edge)
 local FAINT = 0.4        -- the glow for something running out: still, this strong
-local CHECK_EVERY = 0.5
+local CHECK_EVERY = 0.5  -- seconds between looks once something changed (every 5 regardless)
 
 local Actions = ns.Actions
 local Slot, ActionOn, Buttons = Actions.Slot, Actions.Cast, Actions.Buttons
 
 local lit = {}      -- button -> true while it glows
 local faint = {}    -- button -> true while it glows faintly (a class buff running out)
-local litList = {}  -- (the same, as a list, for Fade.lua)
+local litList = {}  -- (the same, as a list: ns.HintButtons)
 local glows = {}    -- button -> its glow frame
 local dirty = true
 
@@ -69,6 +69,7 @@ local function BuffNames()
 			local duration = type(aura) == "table" and Clean(aura.duration)
 			if name and type(expires) == "number" and type(duration) == "number" then
 				local key = name:lower()
+				-- (a buff with no end never runs out)
 				local left = duration > 0 and expires > 0 and expires - now or math.huge
 				if not ends[key] or ends[key].left < left then ends[key] = { left = left, duration = duration } end
 			end
@@ -76,6 +77,7 @@ local function BuffNames()
 			name = Clean((Safe(UnitBuff, "player", index)))
 			if name == nil then break end
 		end
+		-- (a name hidden as a secret: the buffs can't be read, not "none")
 		if name == nil then return nil end
 		names[name:lower()] = true
 	end
@@ -95,6 +97,7 @@ local function TooltipLines(item)
 	local lines = {}
 	local data = C_TooltipInfo and C_TooltipInfo.GetItemByID and Safe(C_TooltipInfo.GetItemByID, item)
 	if type(data) == "table" then
+		-- (older tooltip data keeps its text in args until surfaced)
 		if TooltipUtil and TooltipUtil.SurfaceArgs then Safe(TooltipUtil.SurfaceArgs, data) end
 		for _, line in ipairs(type(data.lines) == "table" and data.lines or {}) do
 			if TooltipUtil and TooltipUtil.SurfaceArgs and line.leftText == nil then Safe(TooltipUtil.SurfaceArgs, line) end
@@ -102,6 +105,7 @@ local function TooltipLines(item)
 			if type(text) == "string" and text ~= "" then lines[#lines + 1] = text end
 		end
 	end
+	-- (only the name: the item not loaded yet)
 	if #lines > 1 then return lines, "tooltip info" end
 	-- (else the old way: a hidden tooltip of our own, read line by line)
 	if not scanner then
@@ -269,7 +273,7 @@ local function Bare(slot, enchanted)
 	local item = Clean(Safe(GetInventoryItemID, "player", slot))
 	if type(item) ~= "number" then return false end
 	local class, subclass = ItemClass(item)
-	return class == 2 and subclass ~= 20 and not enchanted
+	return class == 2 and subclass ~= 20 and not enchanted -- (2: weapons; 20: fishing poles)
 end
 
 local function Missing(def, buffs)
@@ -291,6 +295,7 @@ local function RunningOut(def, buffs, ends)
 		local main, mainLeft, _, _, off, offLeft = Safe(GetWeaponEnchantInfo)
 		main, mainLeft, off, offLeft = Clean(main), Clean(mainLeft), Clean(off), Clean(offLeft)
 		local function Low(slot, on, left)
+			-- (an enchant's time left comes in milliseconds)
 			return on and type(left) == "number" and left / 1000 < at and Bare(slot, false)
 		end
 		return Low(16, main, mainLeft) or (def.weapon == "both" and Low(17, off, offLeft)) or false
@@ -327,6 +332,7 @@ end
 -- Which spell of a group glows: the one you used last if it is on your bars, else the first that can be cast.
 local function Pick(def, bars)
 	local last = Memory()[def.key]
+	-- (your choice on your bars but not castable now: nothing glows, rather than another choice)
 	if last and bars.spells[last] ~= nil then return last, bars.spells[last] end
 	for _, name in ipairs(def.spells) do
 		if bars.spells[name] then return name, true end
@@ -400,7 +406,8 @@ local function WeaponGhost(out, slot)
 end
 
 -- What your class keeps up and is missing now: { name, icon, spell (to cast it), weapon (its slot) } each; nil when
--- your buffs can't be read (in a fight: what was missing before stays). Not while mounted, dead or flying.
+-- your buffs can't be read (in a fight: what was missing before stays). Not while mounted, dead, flying or in a
+-- vehicle.
 function ns.MissingClassBuffs()
 	if Mounted() or Clean(Safe(UnitIsDeadOrGhost, "player")) or Clean(Safe(UnitOnTaxi, "player")) then return {} end
 	if Clean(Safe(UnitInVehicle, "player")) then return {} end
@@ -603,6 +610,7 @@ local function Apply(want, soon)
 		if not faint[button] then
 			faint[button] = true
 			local glow = Glow(button)
+			-- (still: a running pulse would keep changing its opacity)
 			glow.pulse:Stop()
 			glow.texture:SetAlpha(ns.BarsOwnGlow and ns.BarsOwnGlow(button) and 0 or 1)
 			glow:SetAlpha(FAINT)
@@ -614,7 +622,7 @@ local function Apply(want, soon)
 	for button in pairs(lit) do litList[#litList + 1] = button end
 end
 
--- The buttons glowing now (Fade.lua brings their bars back).
+-- The buttons glowing now (ActionBars.lua lights its own glow on them, Ready.lua keeps them at full).
 function ns.HintButtons() return litList end
 -- A button's glow (ActionBars.lua: Glass and Round light their own in its place, this one's texture put away).
 function ns.HintGlow(button) return glows[button] end
@@ -627,8 +635,8 @@ function ns.HintsDirty() dirty = true end
 -- Start ---------------------------------------------------------------------------------------------------------------
 
 local function Init()
-	WELL_FED = Lower(SpellName(19705))
-	EATING = Lower(SpellName(433))
+	WELL_FED = Lower(SpellName(19705)) -- (Well Fed, in your language)
+	EATING = Lower(SpellName(433))     -- (Food, the buff while eating)
 	local events = CreateFrame("Frame")
 	for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED",
 		"UPDATE_BONUS_ACTIONBAR", "BAG_UPDATE_DELAYED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",

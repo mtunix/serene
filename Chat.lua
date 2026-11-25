@@ -3,8 +3,8 @@ local Safe, Clean, IsSecret, Over = ns.Safe, ns.Clean, ns.IsSecret, ns.Over
 
 -- The chat in glass.
 -- * No window: the chat's frame, its background, its buttons and scroll bar are taken away. Each message lies on
---   its own soft dark backdrop, as wide as its words (and a short tail fading out to the right), and goes with it
---   when the game fades it out. Nothing is drawn where there is no message.
+--   its own soft dark backdrop, as wide as the window, and goes with it when the game fades it out. Nothing is
+--   drawn where there is no message.
 -- * The game's own lines and colors ("[1. General] [Name]: text"), the channel's zone dropped ("[2. Trade]").
 -- * The tabs as plain words (the one shown in gold, over a fine gold line), only under the mouse. The line to
 --   write in gets a dark glass ground with a gold edge while you type. The window's own look (a faint pane, the
@@ -20,13 +20,13 @@ local INK = { 0.035, 0.04, 0.05 }
 local VEIL = 0.5            -- the backdrop's darkness
 local PAD_X = 6             -- room left of the words (above and below: half the line spacing, so backdrops meet)
 local TAIL = 0              -- (a soft end beyond the window's edge: none, the backdrop fills the window)
-local EDGE = 2
-local TINT = 0.09
+local EDGE = 2              -- the coloured edge's width: a message naming you, a whisper, the line being written
+local TINT = 0.09           -- the gold tint over a message naming you
 local GOLD = { 1, 0.82, 0.35 }
 local VIOLET = { 0.886, 0.545, 0.91 }
 local TAB_WORDS = { 0.92, 0.91, 0.88 }
-local FADE_DURATION = 3
-local HOVER_IN, HOVER_OUT, LINGER = 0.15, 0.35, 1.2
+local FADE_DURATION = 3     -- seconds a message takes to fade out, once its time is up
+local HOVER_IN, HOVER_OUT, LINGER = 0.15, 0.35, 1.2 -- the controls coming, going; seconds kept after the mouse leaves
 local TAB_ROOM, BOX_ROOM = 30, 34 -- the tabs above the lines, the line to write in below, counted as the chat
 local ROOM_PAD = 4          -- (the messages, let down into the line to write in's room, stop this short of its foot)
 local GLIDE_UP, GLIDE_DOWN = 0.22, 0.34 -- seconds for the messages to rise as you start writing, and settle after
@@ -48,12 +48,13 @@ local under, holder -- the backdrops' layer; the chat's buttons, shown under the
 local dressed = {} -- chat window -> true
 local veils = setmetatable({}, { __mode = "k" }) -- a drawn line -> its backdrop
 local widths = setmetatable({}, { __mode = "k" }) -- chat window -> its last known width (hidden in a fight)
-local seen = {}
+local seen = {} -- the backdrops drawn this frame (any other is hidden)
 local myName, myPattern
 local hover, lastNear = 0, -math.huge
 local FadeTabs -- (below)
 local active = false
 
+-- (moved into a frame never shown, not hidden: the game shows its art again)
 local function Tuck(region)
 	if type(region) == "table" and region.SetParent and region:GetParent() ~= hidden then
 		pcall(region.SetParent, region, hidden)
@@ -92,7 +93,7 @@ local function PaintTab(tab, selected)
 	if type(tab) ~= "table" then return end
 	local text = tab.Text or (tab.GetFontString and tab:GetFontString())
 	if type(text) ~= "table" or not text.SetTextColor then return end
-	if selected == nil then
+	if selected == nil then -- (not told by the game: its window compared with the one shown)
 		local name = tab.GetName and tab:GetName()
 		local frame = name and _G[(name:gsub("Tab$", ""))]
 		selected = frame ~= nil and frame == Selected()
@@ -242,12 +243,13 @@ end
 -- The chat's buttons: the kept ones carried into a frame of ours, shown under the mouse (ChatShell.lua places
 -- and dresses them); the others taken away.
 local function Carry()
-	if InCombatLockdown() then return end
+	if InCombatLockdown() then return end -- (lockdown: the buttons wait for the next pass after the fight)
 	for _, list in ipairs({ BUTTONS, DROPPED }) do
 		local into = list == BUTTONS and holder or hidden
 		for _, name in ipairs(list) do
 			local button = _G[name]
 			if type(button) == "table" and button.SetParent and button:GetParent() ~= into then
+				-- (a protected button stays with the game: moving it would taint)
 				local protected = button.IsProtected and select(1, button:IsProtected())
 				if not protected then pcall(button.SetParent, button, into) end
 			end
@@ -268,6 +270,7 @@ end
 
 local function Box(frame)
 	local box = type(frame) == "table" and frame.Selection
+	-- (a docked window has no box of its own: the dock's, on the first window; unreadable, as in a fight: none)
 	if not box and type(frame) == "table" and frame.isDocked and ChatFrame1 then box = ChatFrame1.Selection end
 	if type(box) == "table" and box.GetLeft and Clean(Safe(box.GetLeft, box)) then return box end
 end
@@ -308,7 +311,7 @@ local function Room(frame, box)
 		-- (a line to write in above the window, or one far off: no room taken)
 		frame.sereneRoom = (room > 0 and room <= 60) and room or 0
 	end
-	return frame.sereneRoom or 0
+	return frame.sereneRoom or 0 -- (positions unreadable, as in a fight: the room last measured)
 end
 
 local function Ease(t) return t * t * (3 - 2 * t) end
@@ -356,6 +359,7 @@ local function Settle(frame)
 	local visible = Clean(Safe(frame.GetTimeVisible, frame)) or ns.db.lineTime or 30
 	local override = rawget(frame, "overrideFadeTimestamp")
 	if type(override) == "number" and not IsSecret(override) then
+		-- (never moved back: a later one the game set stands)
 		frame.overrideFadeTimestamp = math.max(override, now - visible)
 	end
 	pcall(frame.SetFading, frame, true)
@@ -386,7 +390,7 @@ local function Glide(frame, elapsed)
 		Settle(frame)
 	end
 	local target = writing and 1 or 0
-	local up = frame.sereneUp or target
+	local up = frame.sereneUp or target -- (first seen: already in place, no glide at login)
 	up = ns.Approach(up, target, elapsed or 0, GLIDE_UP, GLIDE_DOWN)
 	frame.sereneUp = up
 	if room > 0 and type(box) == "table" then
@@ -408,6 +412,7 @@ local function Gain(frame)
 	local left = box and Clean(Safe(box.GetLeft, box))
 	local own = Clean(Safe(frame.GetLeft, frame))
 	if not (left and own) then return 0 end
+	-- (the backdrop's own pad and a little air kept inside the box's left edge)
 	return math.max(0, Round(own - left - PAD_X - 4))
 end
 
@@ -419,6 +424,7 @@ local function Widen(frame, width, drop, room)
 	if type(lines) ~= "table" or not lines[1] then return 0 end
 	local gain = Gain(frame)
 	drop, room = drop or 0, room or 0
+	-- (it runs every frame: laid out again only when something changed)
 	if frame.sereneGain == gain and frame.sereneFirst == lines[1] and frame.sereneWidth == width
 		and frame.sereneCount == #lines and frame.sereneDrop == drop and frame.sereneRoomAt == room then
 		return gain
@@ -459,7 +465,7 @@ local function Shift(region, by)
 	end
 end
 
--- (where in it the words start: measured once seen, else a guess)
+-- (where in it the words start: measured once seen, if likely; else the last measure, else a guess)
 local function Inset(region, words, guess)
 	local left = Clean(Safe(region.GetLeft, region))
 	local at = type(words) == "table" and Clean(Safe(words.GetLeft, words))
@@ -497,6 +503,7 @@ local function AlignAll()
 		end
 	end
 	local dock, tab = _G.GeneralDockManager, _G.ChatFrame1Tab
+	-- (a protected dock is the game's to place)
 	if dock and tab and not Safe(dock.IsProtected, dock) then
 		local words = tab.Text or (tab.GetFontString and tab:GetFontString())
 		local tabLeft, dockLeft = Clean(Safe(tab.GetLeft, tab)), Clean(Safe(dock.GetLeft, dock))
@@ -527,6 +534,7 @@ FadeTabs = function(alpha)
 		if type(tab) == "table" and tab.SetAlpha then
 			local alert = tab.alerting and true or false
 			if tab.sereneAlert ~= alert then
+				-- (an alerting tab stays seen while the dock it sits in is faded)
 				tab.sereneAlert = alert
 				pcall(tab.SetIgnoreParentAlpha, tab, alert)
 			end
@@ -562,7 +570,7 @@ end
 local function Veil(line)
 	local v = veils[line]
 	if v then return v end
-	v = { alpha = -1 }
+	v = { alpha = -1 } -- (-1: never drawn, so the first opacity always applies)
 	v.solid = under:CreateTexture(nil, "BACKGROUND")
 	v.solid:SetColorTexture(INK[1], INK[2], INK[3], VEIL)
 	v.tail = under:CreateTexture(nil, "BACKGROUND")
@@ -652,7 +660,7 @@ local function MarkOf(v, text)
 		local c = mark == "whisper" and VIOLET or GOLD
 		v.edge:SetColorTexture(c[1], c[2], c[3], 0.95)
 		v.tint:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], TINT)
-		v.alpha = -1
+		v.alpha = -1 -- (drawn again next, so the tint and edge show or hide for the new mark)
 	end
 	return mark
 end
@@ -672,7 +680,7 @@ local function DrawWindow(frame, elapsed)
 	end
 	if bottom then bottom = bottom - drop end -- (the messages let down: their backdrops with them)
 	local whole = Clean(Safe(UIParent.GetEffectiveAlpha, UIParent)) or 1
-	if whole <= 0 then whole = 1 end
+	if whole <= 0 then whole = 1 end -- (the whole interface faded out: nothing to divide by)
 	for _, line in ipairs(Lines(frame)) do
 		local v = Veil(line)
 		seen[v] = true
@@ -704,6 +712,7 @@ local function DrawWindow(frame, elapsed)
 			end
 		end
 		local text = alpha > 0 and Safe(line.GetText, line) or nil
+		-- (secret words, the game's in a fight, keep their backdrop: only an empty line has none)
 		if text == nil or (not IsSecret(text) and text == "") then alpha = 0 end
 		if alpha <= 0 then
 			HideVeil(v)
@@ -801,6 +810,7 @@ local function OnLinkEnter(frame, link)
 	local kind = link:match("^(%a+):")
 	if kind and SHOWN_LINKS[kind] then
 		GameTooltip:SetOwner(frame, "ANCHOR_CURSOR")
+		-- (a link this client can't show raises an error: no tooltip then)
 		if pcall(GameTooltip.SetHyperlink, GameTooltip, link) then
 			GameTooltip:Show()
 			linkShown = true
@@ -836,6 +846,7 @@ local polished = {}
 Polish = function(frame)
 	if polished[frame] then return end
 	polished[frame] = true
+	-- (links answer the mouse, so OnHyperlinkEnter is heard)
 	if frame.SetHyperlinksEnabled then pcall(frame.SetHyperlinksEnabled, frame, true) end
 	-- (the game lays its lines out again: they are widened again)
 	if type(frame.RefreshLayout) == "function" then
@@ -910,8 +921,8 @@ local function HearAlerts()
 	if type(alerts) ~= "table" or not alerts.SetPoint then return end
 	-- (the game, or another addon, placing it again: put back)
 	hooksecurefunc(alerts, "SetPoint", function()
-		if alertBusy then return end
-		C_Timer.After(0, PlaceAlerts)
+		if alertBusy then return end -- (Serene's own placing)
+		C_Timer.After(0, PlaceAlerts) -- (next frame: after the game has finished placing it)
 	end)
 	-- (placed again as each toast shows: the chat may have moved since)
 	local toast = _G.BNToastFrame
@@ -932,10 +943,12 @@ local function Init()
 		myName = name
 		myPattern = "%f[%a]" .. name:lower():gsub("%W", "%%%0") .. "%f[%A]"
 	end
+	-- (one level under the chat window, so the backdrops lie behind its words)
 	under = CreateFrame("Frame", nil, UIParent)
 	under:SetAllPoints(UIParent)
 	under:SetFrameStrata(ChatFrame1:GetFrameStrata() or "LOW")
 	under:SetFrameLevel(math.max(0, (ChatFrame1:GetFrameLevel() or 1) - 1))
+	-- (above the chat; its opacity is the hover)
 	holder = CreateFrame("Frame", nil, UIParent)
 	holder:SetAllPoints(UIParent)
 	holder:SetFrameStrata("MEDIUM")
@@ -957,6 +970,7 @@ local function Init()
 		pcall(add, "CHAT_MSG_SYSTEM", QuietSystem)
 	end
 	if _G.FCFTab_UpdateColors then hooksecurefunc("FCFTab_UpdateColors", function(tab, selected) PaintTab(tab, selected) end) end
+	-- (next frame: the game has finished making or docking the window by then)
 	local soon = function() C_Timer.After(0, DressAll) end
 	for _, fn in ipairs({ "FCF_OpenNewWindow", "FCF_OpenTemporaryWindow", "FCF_DockFrame", "FCF_UnDockFrame" }) do
 		if _G[fn] then hooksecurefunc(fn, soon) end

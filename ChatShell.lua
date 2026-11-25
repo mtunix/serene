@@ -12,10 +12,10 @@ local Safe, Clean, Over = ns.Safe, ns.Clean, ns.Over
 local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local PANE = 0.3          -- the glass pane's darkness under the mouse
 local HAIR = 0.08         -- the hairlines' brightness
-local ICON, ICON_GAP = 14, 6
+local ICON, ICON_GAP = 14, 6 -- the icons' size, and the room between them
 local TRACK_X = 4         -- the scroll bar's track, from the window's right edge
-local THUMB_MIN = 18
-local PILL_IN, PILL_OUT = 0.15, 0.3
+local THUMB_MIN = 18      -- the thumb's shortest, in a long history
+local PILL_IN, PILL_OUT = 0.15, 0.3 -- seconds for the pill to come and go
 
 local chat -- what Chat.lua shares (ns.chat)
 local pane, hair, bar, track, thumb, grip, pill
@@ -47,6 +47,7 @@ local function Reskin(button, file)
 		button:HookScript("OnEnter", function() Words(icon, true) end)
 		button:HookScript("OnLeave", function() Words(icon, false) end)
 	end
+	-- (done again on every dress: the game may give its textures back)
 	for _, region in ipairs({ button:GetRegions() }) do
 		if region ~= button.sereneIcon and region.GetObjectType and region:GetObjectType() == "Texture" then
 			pcall(region.SetAlpha, region, 0)
@@ -55,7 +56,7 @@ local function Reskin(button, file)
 end
 
 function ns.ShellDress()
-	if not chat or InCombatLockdown() then return end
+	if not chat or InCombatLockdown() then return end -- (as Carry: the game's buttons are left alone in a fight)
 	local frame = chat.Selected()
 	if not frame then return end
 	local x = 0
@@ -68,7 +69,7 @@ function ns.ShellDress()
 			-- (the tabs' row, at its right end, in Edit Mode's box; the menu last)
 			local box = ns.ChatBox and ns.ChatBox(frame)
 			if box then
-				-- (on the tabs' row, at the right end of the box)
+				-- (the box's right end, counted from the window's right edge)
 				local inside = Round((Clean(Safe(box.GetRight, box)) or 0) - (Clean(Safe(frame.GetRight, frame)) or 0))
 				pcall(button.SetPoint, button, "BOTTOMRIGHT", frame, "TOPRIGHT", inside - 5 - x, 5)
 			else
@@ -155,7 +156,7 @@ local function DrawBar(frame, hover)
 	size = math.min(size, height)
 	-- dragged: the cursor sets where the window is
 	if dragging then
-		if not IsMouseButtonDown("LeftButton") then
+		if not IsMouseButtonDown("LeftButton") then -- (let go off the bar: its OnMouseUp never came)
 			dragging = false
 		else
 			local _, y = GetCursorPosition()
@@ -185,6 +186,7 @@ end
 local function Count(frame)
 	if hooked[frame] or not frame.AddMessage then return end
 	hooked[frame] = true
+	-- (a line come while scrolled back: one more for the pill to count)
 	hooksecurefunc(frame, "AddMessage", function(self)
 		local offset = Clean(Safe(self.GetScrollOffset, self)) or 0
 		if offset > 0 then unread[self] = (unread[self] or 0) + 1 end
@@ -232,6 +234,7 @@ local function Update(_, elapsed)
 	end
 	local locked = frame.isLocked and true or false
 	grip:SetShown(not locked)
+	-- (the button let go anywhere: the size kept, saved as the game saves its own)
 	if sizing and not IsMouseButtonDown("LeftButton") then
 		Safe(sizing.StopMovingOrSizing, sizing)
 		if _G.FCF_SavePositionAndDimensions then Safe(_G.FCF_SavePositionAndDimensions, sizing) end
@@ -251,7 +254,7 @@ local function Init()
 	if not chat then return end
 	local under, holder, INK = chat.under, chat.holder, chat.INK
 
-	pane = under:CreateTexture(nil, "BACKGROUND", nil, -8)
+	pane = under:CreateTexture(nil, "BACKGROUND", nil, -8) -- (beneath the messages' backdrops)
 	pane:SetColorTexture(INK[1], INK[2], INK[3], 1)
 	pane:SetAlpha(0)
 	hair = under:CreateTexture(nil, "BORDER")
@@ -300,6 +303,7 @@ local function Init()
 		if pcall(target.StartSizing, target, "BOTTOMRIGHT") then sizing = target end
 	end)
 
+	-- (not on the holder: scrolled back, the pill shows whether or not the mouse is near)
 	pill = CreateFrame("Button", nil, UIParent)
 	pill:SetFrameStrata(ChatFrame1:GetFrameStrata() or "LOW")
 	pill:SetFrameLevel((ChatFrame1:GetFrameLevel() or 1) + 10)

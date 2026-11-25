@@ -11,7 +11,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 local MUTED = ns.MUTED
 local GOLD_TEXT = ns.GOLD_TEXT
 
--- What a full stack of the merchant's item at this index would be: how many, at what cost (nil: none).
+-- The merchant's item at this index: price, lot size, supply, purchasable, paid in tokens or items.
 local function ItemInfo(index)
 	local api = C_MerchantFrame and C_MerchantFrame.GetItemInfo
 	if api then
@@ -31,9 +31,10 @@ local function StackSize(link)
 		if type(size) == "number" then return size end
 	end
 	local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-	return Clean(select(8, Safe(get, link)))
+	return Clean(select(8, Safe(get, link))) -- (the 8th value: its max stack)
 end
 
+-- What a full stack of the merchant's item at this index would be: how many, at what cost (nil: none, and why).
 local function Plan(index)
 	local price, bundle, available, purchasable, extended = ItemInfo(index)
 	price, bundle, available = Clean(price), Clean(bundle) or 1, Clean(available)
@@ -48,10 +49,10 @@ local function Plan(index)
 	if price > 0 then
 		local each = price / bundle
 		local money = Clean(Safe(GetMoney)) or 0
-		local afford = math.floor(money / each + 1e-6)
+		local afford = math.floor(money / each + 1e-6) -- (a hair over: a division's rounding never costs one)
 		if afford < count then count, short = afford, "money" end
 	end
-	-- (what the merchant has: a limited supply counts bundles)
+	-- (what the merchant has: a limited supply counts bundles; -1 is no limit)
 	if type(available) == "number" and available >= 0 and available * bundle < count then
 		count, short = available * bundle, "supply"
 	end
@@ -137,7 +138,7 @@ local function Split() return _G.StackSplitFrame end
 
 local function Owner()
 	local frame = Split()
-	local owner = frame and (frame.owner or frame.Owner)
+	local owner = frame and (frame.owner or frame.Owner) -- (either key, as the client's popup names it)
 	if type(owner) ~= "table" or not owner.GetName then return nil end
 	if owner.sereneMerchantRow then return owner end -- (a row of Serene's merchant window, Vendor.lua)
 	local name = owner:GetName() or ""
@@ -145,6 +146,7 @@ local function Owner()
 	return owner
 end
 
+-- (the popup's parts: by their old global names, or by the newer template's keys)
 local function GameButtons()
 	local frame = Split()
 	return _G.StackSplitOkayButton or (frame and frame.OkayButton), _G.StackSplitCancelButton or (frame and frame.CancelButton)
@@ -242,6 +244,7 @@ local function Pieces()
 			if highlight then art[highlight] = highlight:GetAlpha() end
 			arrow:HookScript("OnEnter", PaintArrow)
 			arrow:HookScript("OnLeave", PaintArrow)
+			-- (the game greys an arrow at either end of the count)
 			if arrow.Enable then hooksecurefunc(arrow, "Enable", PaintArrow) end
 			if arrow.Disable then hooksecurefunc(arrow, "Disable", PaintArrow) end
 			if arrow.SetEnabled then hooksecurefunc(arrow, "SetEnabled", PaintArrow) end
@@ -298,6 +301,7 @@ local function LayoutSerene(buttons)
 	if not mine.size then mine.size = { frame:GetWidth(), frame:GetHeight() } end
 	frame:SetSize(SPLIT_W, SPLIT_H)
 	mine.field:ClearAllPoints()
+	-- (34: the padding, an arrow and its gap on each side)
 	mine.field:SetPoint("TOPLEFT", frame, "TOPLEFT", 34, -SPLIT_PAD)
 	mine.field:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -34, -SPLIT_PAD)
 	mine.field:SetHeight(24)
@@ -327,7 +331,7 @@ end
 -- The game's look with three buttons: the same red buttons, a little narrower, side by side.
 local function LayoutGame(buttons)
 	local frame = Split()
-	local width = math.floor(((frame:GetWidth() or 172) - 24 - 8) / 3)
+	local width = math.floor(((frame:GetWidth() or 172) - 24 - 8) / 3) -- (12 at each side, 4 between)
 	for index, button in ipairs(buttons) do
 		Hold(button)
 		button:SetWidth(width)
@@ -347,13 +351,16 @@ local function Dress(three)
 	if not low and okay:GetBottom() and frame:GetBottom() then
 		low = math.floor(okay:GetBottom() - frame:GetBottom() + 0.5)
 	end
+	-- (every opening starts again from the game's own layout)
 	LetGo()
 	local buttons = three and { okay, stackButton, cancel } or { okay, cancel }
 	local on = ns.On("merchant")
 	if on then
 		Pieces()
+		-- (the Stack button may be made after the rest was dressed)
 		if stackButton then FlatButton(stackButton) end
 	end
+	-- (never dressed: nothing to give back, the game's look left alone)
 	if on or dressed then
 		dressed = on
 		ShowMine(on)
@@ -404,6 +411,7 @@ end
 -- Alt-click and the tooltip's hint ------------------------------------------------------------------------------------
 
 local hooked = {}
+-- (12: the buyback page's buttons, two more than the buy page's ten; looked for again at each merchant)
 local function HookButtons()
 	for index = 1, 12 do
 		local button = _G["MerchantItem" .. index .. "ItemButton"]
@@ -412,6 +420,7 @@ local function HookButtons()
 			button:HookScript("OnClick", function(self)
 				if IsAltKeyDown() and not IsShiftKeyDown() and not IsControlKeyDown() then
 					local tab = _G.MerchantFrame and _G.MerchantFrame.selectedTab
+					-- (the buy tab only: on buyback the same buttons buy back)
 					if tab == nil or tab == 1 then Buy(self:GetID()) end
 				end
 			end)

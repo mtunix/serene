@@ -93,7 +93,7 @@ local function Unmask(bar)
 	local fill = Safe(bar.GetStatusBarTexture, bar)
 	if type(fill) ~= "table" or not fill.GetNumMaskTextures then return end
 	local count = Clean(Safe(fill.GetNumMaskTextures, fill)) or 0
-	for index = count, 1, -1 do
+	for index = count, 1, -1 do -- (from the end: taking one off moves the ones after it down)
 		local mask = Safe(fill.GetMaskTexture, fill, index)
 		if mask then pcall(fill.RemoveMaskTexture, fill, mask) end
 	end
@@ -121,6 +121,7 @@ end
 -- The spark at the fill's moving end, while the cast goes on.
 local function Spark(c)
 	local bar, spark, fill = c.bar, c.spark, c.fill
+	-- (the game's own state on the bar, read with rawget: some of its frames have a metatable behind them)
 	local going = Clean(rawget(bar, "casting")) or Clean(rawget(bar, "channeling")) or Clean(rawget(bar, "reverseChanneling"))
 	local value = Clean(Safe(bar.GetValue, bar))
 	local least, most = Safe(bar.GetMinMaxValues, bar)
@@ -158,7 +159,7 @@ local function Layout(c)
 	if width <= ns.CAST_WIDTH_GAME then width = c.gameWidth end
 	Size(bar, width, height)
 	local lined = ns.db and ns.db.unitBorder ~= "none"
-	local e = lined and PAD + ns.Pixel(bar) or PAD
+	local e = lined and PAD + ns.Pixel(bar) or PAD -- (a pixel more for the hairline, drawn just inside the glass)
 	-- the icon
 	local icon = c.icon
 	local withIcon = false
@@ -233,7 +234,7 @@ local function Dress(bar)
 	hidden:Hide()
 	c.fill = Safe(bar.GetStatusBarTexture, bar)
 	c.gameWidth = Clean(Safe(bar.GetWidth, bar)) -- (the game's own width, for when none is chosen)
-	c.away = {}
+	c.away = {} -- (the art put away: counted for /serene debug)
 	-- (the art onto the hidden frame; the fill and the icon stay, the words stay: the name, and any other is a time)
 	for _, region in ipairs({ Safe(bar.GetRegions, bar) }) do
 		if IsTexture(region) then
@@ -275,6 +276,7 @@ local function Dress(bar)
 	hooksecurefunc(bar, "SetStatusBarColor", function(_, r, g, b)
 		if holding then return end
 		r, g, b = Clean(r), Clean(g), Clean(b)
+		-- (the game's own colour kept: Units' CastColor tells from it what an older bar is showing)
 		if type(r) == "number" and type(g) == "number" and type(b) == "number" then c.raw = { r, g, b } end
 		Paint(c)
 	end)

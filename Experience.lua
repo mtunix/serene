@@ -3,8 +3,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 
 -- Experience gained: the game's experience bar comes back for a moment (Fade.lua asks ns.XPGained), and what was just
 -- earned shows on it: a gold fill runs from where the bar was to where it is now, its tip glowing; a moment later the
--- bar's own colour sweeps in over the gold, and once it is there the tip's glow fades away. Kills one after another carry on from where
--- the fills have got to; a level gained starts again from the left.
+-- bar's own colour sweeps in over the gold, and once it is there the tip's glow fades away. Kills one after another
+-- carry on from where the fills have got to; a level gained starts again from the left.
 -- /serene xpgain on|off
 
 local SHOW = 5                          -- seconds the bar stays after experience is gained
@@ -16,7 +16,9 @@ local CONTAINERS = { "MainStatusTrackingBarContainer", "SecondaryStatusTrackingB
 
 local lastXP, lastMax, lastLevel
 local gainedAt = -math.huge
-local anim -- { from, gfrom, gain, to, start, mode, now, gold, fading, done } (experience points, as the game's bar counts them)
+-- { from, gfrom, gain, to, start, levelled, mode, last, moved, now, gold, fading, done } (experience points, as the
+-- game's bar counts them)
+local anim
 local bar, overlay
 local lastMode -- (/serene debug: how the last gain was shown)
 local lastFade -- (/serene debug: { frames, seconds, placed } of the last fade away)
@@ -31,6 +33,7 @@ end
 local function IsXP(frame, need)
 	if type(frame) ~= "table" or not frame.GetObjectType or Safe(frame.GetObjectType, frame) ~= "StatusBar" then return false end
 	if not Clean(Safe(frame.IsVisible, frame)) then return false end
+	-- (the reputation and honour bars share the containers: told apart by their most)
 	return Most(frame) == need
 end
 
@@ -203,6 +206,7 @@ local function Paint()
 	else
 		purple = Value(target) or anim.from
 		if purple ~= anim.last then anim.last, anim.moved = purple, now end
+		-- (the game's bar there and still for a moment, or five seconds at most: the glow fades)
 		if not anim.fading and ((now - anim.moved > 0.2 and purple >= anim.to - 0.5 and since > GOLD_IN) or since > 5) then
 			anim.fading = now
 		end
@@ -261,7 +265,7 @@ local function Overlay(target)
 		overlay.tip:SetBlendMode("ADD")
 		overlay.tip:SetWidth(2)
 		overlay:SetScript("OnUpdate", Paint)
-		overlay:SetScript("OnHide", Reveal)
+		overlay:SetScript("OnHide", Reveal) -- (hidden with the game's bar too: its fill never left unseen)
 	end
 	-- (a child of the game's bar: it fades with it)
 	if overlay:GetParent() ~= target then
@@ -294,6 +298,7 @@ local function OnXP()
 	local xp, most, level = Read()
 	if type(xp) ~= "number" or type(most) ~= "number" or most <= 0 or type(level) ~= "number" then return end
 	if lastXP then
+		-- (the level's number may come after its experience: a drop with a new most is a level too)
 		local levelled = level > lastLevel or (xp < lastXP and most ~= lastMax)
 		if (levelled or xp > lastXP) and ns.On("xpGain") then
 			local now = GetTime()

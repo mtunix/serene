@@ -24,6 +24,7 @@ local function Key(button)
 	local name = Name(button)
 	local label = rawget(button, "HotKey") or (name and _G[name .. "HotKey"])
 	local text = label and Clean(Safe(label.GetText, label))
+	-- (the game's dot on a button with no key bound is not a key)
 	if type(text) ~= "string" or text == "" or (_G.RANGE_INDICATOR and text == _G.RANGE_INDICATOR) then return nil end
 	return text
 end
@@ -83,6 +84,7 @@ local function Init()
 	-- (by the key: the game's key bindings press a button through this, on the way down and up)
 	if type(_G.TryUseActionButton) == "function" then
 		hooksecurefunc("TryUseActionButton", function(button, down)
+			-- (the down press only; nil when the game doesn't say, counted)
 			if down ~= false and type(button) == "table" then pcall(Pressed, button, true) end
 		end)
 	end
@@ -104,6 +106,8 @@ local function Init()
 	end
 	local function All() if ns.BarsEach then ns.BarsEach(Hook) end end
 	All()
+	-- (again a moment later, for buttons ActionBars.lua dresses just after login)
+	-- NOTE: buttons dressed only after a fight (a /reload in one) never get these hooks
 	C_Timer.After(1, All)
 end
 

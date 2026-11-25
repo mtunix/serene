@@ -25,11 +25,11 @@ local HEAD, FILTER, ROW, FOOT = 30, 26, 26, 36
 local FEWEST, MOST = 6, 14      -- rows the list shows (more: the mouse wheel)
 local ICON = 20
 local GLASS = 0.9
-local OFF_SCREEN = -10000
+local OFF_SCREEN = -10000       -- (the game's window this far left: open, out of sight)
 local HIGH_PRICE = rawget(_G, "MERCHANT_HIGH_PRICE_COST") or 1500000 -- (the game's line for an expensive purchase)
 local MAX_COSTS = 3             -- tokens and items a price may ask
 local SELL_DELAY = 0.15         -- seconds between two items sold, as the server expects
-local MAX_SELL = 120
+local MAX_SELL = 120            -- slots of junk sold in one go, at most
 
 local function G(name) return rawget(_G, name) end
 
@@ -73,7 +73,7 @@ local function Owned(id)
 	local count = (C_Item and C_Item.GetItemCount) or G("GetItemCount")
 	if not (id and count) then return 0, 0 end
 	local bags = Clean(Safe(count, id)) or 0
-	local all = Clean(Safe(count, id, true)) or bags
+	local all = Clean(Safe(count, id, true)) or bags -- (true: the bank counted too)
 	return bags, math.max(0, all - bags)
 end
 
@@ -103,6 +103,7 @@ local function Offer(index)
 	o.id = Clean(Safe(G("GetMerchantItemID"), index)) or IdOf(o.link)
 	o.maxStack = math.max(o.lot, Clean(Safe(G("GetMerchantItemMaxStack"), index)) or o.lot)
 	local refundable = C_MerchantFrame and C_MerchantFrame.IsMerchantItemRefundable
+	-- (no such call: taken as refundable, so no extra confirmation)
 	o.refundable = not refundable or Clean(Safe(refundable, index)) ~= false
 	o.costs = {}
 	if o.extended and (Clean(Safe(G("GetMerchantItemCostInfo"), index)) or 0) > 0 then
@@ -221,7 +222,7 @@ local function Reason(o)
 	local key = o.index .. ":" .. tostring(o.id)
 	if reasons[key] ~= nil then return reasons[key] or nil end
 	local blocked = not o.usable or not o.purchasable
-	local class = o.id and Clean(select(6, Safe(Instant, o.id)))
+	local class = o.id and Clean(select(6, Safe(Instant, o.id))) -- (the 6th value: its item class)
 	local found = false
 	if blocked or class == RECIPE or class == MISC then
 		local lines = Lines(o.index)
@@ -289,6 +290,7 @@ local function Buy(o, count)
 		return Ask(o, quantity)
 	end
 	if o.price * Lots(o, quantity) >= HIGH_PRICE then
+		-- (the game's high-price confirmation buys a single lot only)
 		if single and confirmHigh then return Safe(confirmHigh, Proxy(o)) end
 		return Ask(o, quantity)
 	end
@@ -331,6 +333,7 @@ local function DropSell()
 	local kind = Clean(Safe(G("GetCursorInfo")))
 	if kind == "item" then
 		local sell = G("SellCursorItem")
+		-- (the older way: a merchant's slot 0 takes what the cursor holds, and sells it)
 		if sell then Safe(sell) else Safe(G("PickupMerchantItem"), 0) end
 		return true
 	elseif kind == "merchant" then
@@ -398,6 +401,7 @@ local function SellNext(_, elapsed)
 	-- (the slot read again: the bags may have changed in between)
 	local info = SlotInfo(item.bag, item.slot)
 	if info and info.id == item.id and not info.locked then
+		-- (using an item while at a merchant sells it)
 		Safe(Container.UseContainerItem or G("UseContainerItem"), item.bag, item.slot)
 		earned = earned + SellPrice(info.link) * info.count
 		soldCount = soldCount + info.count
@@ -417,7 +421,7 @@ local function Sell(items, after)
 	end
 	for _, item in ipairs(items) do queue[#queue + 1] = item end
 	afterSale = after
-	sinceSell = SELL_DELAY
+	sinceSell = SELL_DELAY -- (the first one sold at once)
 	seller:SetScript("OnUpdate", SellNext)
 	if Draw then Draw() end
 end
@@ -448,6 +452,7 @@ end
 
 local function Repair()
 	local cost = RepairCost()
+	-- (a guild repair still unanswered: not asked twice, not paid twice)
 	if not cost or guildAsked then return end
 	if ns.On("repairGuild") and Clean(Safe(G("CanGuildBankRepair"))) then
 		-- (-1: no limit)
@@ -519,6 +524,7 @@ local function OnRowEnter(row)
 	row.light:Show()
 	local e = row.entry
 	if not e then return end
+	-- (away from the bags: they sit to its right unless it stands where the game's window opens)
 	GameTooltip:SetOwner(row, ns.db.merchantAt == "game" and "ANCHOR_RIGHT" or "ANCHOR_LEFT")
 	if e.buyback then
 		Safe(GameTooltip.SetBuybackItem, GameTooltip, e.index)
@@ -545,6 +551,7 @@ local function OnRowClick(row, button)
 	-- (the game's modified clicks: a link in the chat, trying it on; then how many)
 	if e.link and IsModifiedClick() and Safe(G("HandleModifiedItemClick"), e.link) then return end
 	if IsModifiedClick("SPLITSTACK") then return HowMany(row, e) end
+	-- (paid in tokens, or no refund: never put on the cursor, bought through the game's confirmation)
 	if button == "RightButton" or e.extended or not e.refundable then return Buy(e) end
 	Safe(G("PickupMerchantItem"), e.index)
 end
@@ -612,7 +619,7 @@ end
 
 local function Fill(row, e)
 	row.entry = e
-	row:SetID(e.index)
+	row:SetID(e.index) -- (the game's popup and Merchant.lua read the index from it)
 	row.icon:SetTexture(e.icon)
 	row.count:SetText(e.lot > 1 and e.lot or "")
 	local dim = e.reason ~= nil or e.available == 0
@@ -629,7 +636,7 @@ end
 local function Gather()
 	wipe(entries)
 	local find = strtrim(query or ""):lower()
-	local usableOnly = ns.On("merchantSearch") and ns.On("merchantUsable")
+	local usableOnly = ns.On("merchantSearch") and ns.On("merchantUsable") -- (only while its word is shown)
 	if page == "buyback" then
 		for index = 1, Clean(Safe(G("GetNumBuybackItems"))) or 0 do
 			local name, icon, price, count = Safe(G("GetBuybackItemInfo"), index)
@@ -852,6 +859,7 @@ local function MakeWindow()
 	win.backTab:SetPoint("LEFT", win.buyTab, "RIGHT", 4, 0)
 	win.money = Text(win, "GameFontHighlightSmall", SOFT)
 	win.money:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -PAD, 13)
+	-- (drawn again a moment later: the new cost comes from the server)
 	win.repair = Word("", function() Repair() C_Timer.After(0.5, Draw) end, function(tooltip)
 		tooltip:AddLine("Repair everything", SOFT[1], SOFT[2], SOFT[3])
 		if ns.On("repairGuild") and Clean(Safe(G("CanGuildBankRepair"))) then
@@ -870,6 +878,7 @@ local function MakeWindow()
 	-- (closed by you, its cross or Escape: the visit ends, as with the game's window)
 	win:SetScript("OnHide", function()
 		HideTooltip()
+		-- (a how-many popup opened from one of its rows closes with it)
 		local split = G("StackSplitFrame")
 		local owner = split and (split.owner or split.Owner)
 		if type(owner) == "table" and owner.sereneMerchantRow then split:Hide() end
@@ -890,6 +899,7 @@ local function Aside(away)
 	if not frame then return end
 	if away then
 		local _, _, _, x = frame:GetPoint(1)
+		-- (already aside: the points kept are still the game's, not overwritten with these)
 		if x ~= OFF_SCREEN then
 			kept = {}
 			for index = 1, frame:GetNumPoints() do kept[index] = { frame:GetPoint(index) } end
@@ -983,7 +993,8 @@ local function Init()
 		if G("UpdateUIPanelPositions") then
 			hooksecurefunc("UpdateUIPanelPositions", function() if open and Wanted() then Aside(true) end end)
 		end
-		-- (the game's window put away by itself: the visit ends with it)
+		-- (the game's window put away by itself: the visit ends with it; looked at a frame later, so a hide and show
+		-- again at once is no end)
 		frame:HookScript("OnHide", function()
 			C_Timer.After(0, function() if open and not frame:IsShown() then Visit(false) end end)
 		end)

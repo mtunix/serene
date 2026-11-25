@@ -11,7 +11,7 @@ local Safe, Clean = ns.Safe, ns.Clean
 --                                            ("spell:133", "macro:<name>"; saved by BarUse.lua, so never change it)
 --   Cast(slot), SpellOn(slot)                what a slot casts ("spell"/"item", id; a macro's own spell or item),
 --                                            the spell put there directly
---   Usable, InRange, Current, OnCooldown, Cooldown (slot); Proc(button), Glows(button, fn)
+--   Usable, InRange, Current, OnCooldown, Cooldown (slot); Proc(button), Glows(button, fn), Region(button, key)
 -- The game's calls the new way first and the old one as a fallback. Unknown is never a fact: what can't be read
 -- (a secret value in a fight) comes back nil, and callers never dim, glow or count on a nil.
 
@@ -93,7 +93,8 @@ function Actions.BarButtons(button)
 	return byBar[barOf[button]] or { button }
 end
 
--- One of a button's parts by its key, or by the old global name (ActionButton1Icon).
+-- One of a button's parts by its key, or by the old global name (ActionButton1Icon). (rawget: some buttons' __index
+-- answers for keys they don't have)
 function Actions.Region(button, key)
 	local name = button.GetName and button:GetName()
 	return rawget(button, key) or (name and _G[name .. key])
@@ -166,7 +167,7 @@ end
 function Actions.InRange(slot)
 	local fn = CAB and CAB.IsActionInRange or _G.IsActionInRange
 	if not fn then return nil end
-	local inRange = Clean(Safe(fn, slot))
+	local inRange = Clean(Safe(fn, slot)) -- (the old call answers 1 or 0, the new one true or false)
 	if inRange == 0 then return false end
 	if inRange == 1 then return true end
 	return inRange

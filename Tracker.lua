@@ -9,8 +9,8 @@ local Safe = ns.Safe
 local NAMES = { "ObjectiveTrackerFrame", "Questie_BaseFrame" }
 
 local hooked = {} -- frame -> true
-local busy = false
-local pending = false
+local busy = false    -- (Serene's own Hide and SetAlpha, not heard by its hooks)
+local pending = false -- (hidden or shown once the fight ends)
 
 local function On() return ns.On("tracker") end
 
@@ -43,6 +43,7 @@ local function Hook()
 		if type(frame) == "table" and frame.HookScript and not hooked[frame] then
 			hooked[frame] = true
 			frame:HookScript("OnShow", Conceal)
+			-- (the game fading it back in, in a fight too: held at 0 while it's put away)
 			hooksecurefunc(frame, "SetAlpha", function(self, alpha)
 				if busy or not On() or alpha == 0 then return end
 				busy = true

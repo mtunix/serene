@@ -12,6 +12,7 @@ local function World()
 	wow.units.target = { name = "Defias Thug", level = 12, class = "Warrior", classFile = "WARRIOR", enemy = true,
 		guid = "Creature-0-1", health = 80, healthMax = 100, combat = true,
 		debuffs = { { name = "Rend", spellId = 772, duration = 15, expirationTime = wow.now + 10, mine = true } },
+		-- (UnitCastingInfo's start and end in milliseconds)
 		casting = { "Fireball", "", 135812, (wow.now - 1) * 1000, (wow.now + 2) * 1000, false, "Cast-2", false, 133 } }
 	wow.units.focus = wow.units.target
 	wow.player.buffs = { { name = "Battle Shout", spellId = 6673, duration = 120, expirationTime = wow.now + 100, mine = true } }

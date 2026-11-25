@@ -236,7 +236,7 @@ test("SellPrice: a secret price reads as 0", function()
 		local out = { "x", "y", 1, 1, 1, "", "", 1, "", 1, wow.secret(13) }
 		return unpack(out, 1, 11)
 	end
-	-- (Items.lua kept the call it found at load: the stub's own; the price itself is what matters)
+	-- (Items.lua keeps the call it found when it loaded: loaded again to take this one)
 	local ns2 = wow.load({ "Items.lua" })
 	eq(ns2.Items.SellPrice(2589), 0)
 end)

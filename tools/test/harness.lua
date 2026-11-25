@@ -5,6 +5,7 @@
 --   ok(value, [what])              truthy
 --   no(value, [what])              falsy
 --   raises(fn, [pattern])          fn errors (and its message has the pattern)
+--   skip(reason)                   leave the test without a verdict (reported as skipped)
 --   clean()                        no errors caught in the addon's scripts, timers or hooks so far
 --
 -- Every test runs in a fresh Lua with a fresh stub of the game: a spec's top level (loading the addon, filling
@@ -15,6 +16,7 @@ _G.__tests = tests
 
 function test(name, fn) tests[#tests + 1] = { name = name, fn = fn } end
 
+-- A value as text for a failure message (tables sorted by key, four levels deep; a secret never looked into).
 local function show(value, depth)
 	depth = depth or 0
 	if type(value) == "string" then return string.format("%q", value) end
@@ -34,6 +36,7 @@ _G.show = show
 local function same(a, b, seen)
 	if a == b then return true end
 	if type(a) ~= "table" or type(b) ~= "table" then return false end
+	-- (pairs already under comparison: a table that holds itself doesn't loop)
 	seen = seen or {}
 	if seen[a] == b then return true end
 	seen[a] = b
@@ -44,6 +47,7 @@ end
 
 function eq(actual, expected, what)
 	if not same(actual, expected) then
+		-- (level 2 here and below: the message points at the spec's line, not this one)
 		error((what and (what .. ": ") or "") .. "expected " .. show(expected) .. ", got " .. show(actual), 2)
 	end
 end

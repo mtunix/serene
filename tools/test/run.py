@@ -13,6 +13,7 @@ import os, re, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+# (the packages live outside the addon: WoW scans everything under AddOns/)
 sys.path.insert(0, os.path.expanduser("~/.cache/serene-tools/py"))
 try:
     from lupa import lua51
@@ -25,9 +26,11 @@ def lua_string(text):
 
 
 def fresh(spec):
+    # (a Lua function's several results come back as a tuple: __run's verdict and message)
     lua = lua51.LuaRuntime(unpack_returned_tuples=True)
     boot = lua.eval("function(code, name) local f, e = loadstring(code, name) if not f then error(e, 0) end return f() end")
-    lua.execute("SERENE_ROOT = " + lua_string(ROOT))
+    lua.execute("SERENE_ROOT = " + lua_string(ROOT))  # (wow.lua reads it as it loads)
+    # (a chunk named @path makes errors and tracebacks name the file)
     for part in ("wow.lua", "globalstrings.lua", "harness.lua"):
         path = os.path.join(HERE, part)
         boot(open(path, encoding="utf-8").read(), "@" + os.path.relpath(path, ROOT))
@@ -44,6 +47,7 @@ def main(argv):
         only = argv[at + 1].lower()
         del argv[at:at + 2]
     folder = os.path.join(HERE, "spec")
+    # (the folder's own files only: spec/lib holds helpers the specs dofile)
     specs = sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".lua"))
     if argv:
         specs = [s for s in specs if any(word.lower() in os.path.basename(s).lower() for word in argv)]
@@ -51,6 +55,7 @@ def main(argv):
     started = time.time()
     for spec in specs:
         name = os.path.relpath(spec, ROOT)
+        # (loaded once to count its tests; each test then gets a Lua of its own, the spec's top level run again)
         try:
             count = len(fresh(spec).globals().__tests)
         except Exception as problem:

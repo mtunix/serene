@@ -7,7 +7,8 @@ local Safe, Clean, IsSecret = ns.Safe, ns.Clean, ns.IsSecret
 -- * Rolls: every choice and roll on one item is one line, written again as the rolls come:
 --   "[Roll] [Raptor Egg] · rolling (3)", then "[Roll] [Raptor Egg] → Sopra Bar (Greed 87)". The mouse over [Roll]:
 --   who chose what, and their rolls. The winner's "receives loot" line that follows is already said: dropped.
--- * Money, experience and reputation: one quiet line that grows through a fight and a little after it:
+-- * Money, experience, reputation and quest rewards: one quiet line that keeps growing while gains come (longer
+--   in a fight):
 --   "+1s 20c · +540 XP · Stromgarde +50" (/serene gains on|off).
 -- Read from the game's own sentences in your language; a line not understood is left as the game wrote it.
 -- /serene loot on|off.
@@ -122,6 +123,7 @@ ns.LootRead = Read -- (tests)
 local function Hour()
 	local format = Clean(Safe(GetCVar, "showTimestamps"))
 	if type(format) ~= "string" or format == "none" or format == "" then return "" end
+	-- (BetterDate where the game has it, as it writes its own lines' hour)
 	local hour = (_G.BetterDate and Safe(_G.BetterDate, format, time())) or date(format)
 	hour = strtrim(tostring(hour or ""))
 	return hour ~= "" and (MUTED .. hour .. "|r") or ""
@@ -130,7 +132,7 @@ end
 local function LootColor()
 	local info = ChatTypeInfo and ChatTypeInfo.LOOT
 	if type(info) == "table" and info.r then return info.r, info.g, info.b end
-	return 0, 0.67, 0
+	return 0, 0.67, 0 -- (the game's own loot green)
 end
 
 -- A line added to a window, and the history entry holding it (written again later).
@@ -139,6 +141,7 @@ local function Add(frame, text)
 	pcall(frame.AddMessage, frame, text, r, g, b)
 	local buffer = frame.historyBuffer
 	local entry = type(buffer) == "table" and buffer.GetEntryAtIndex and Safe(buffer.GetEntryAtIndex, buffer, 1)
+	-- (another addon's hook rewriting the line: not found, and the game's own sentence shows as well)
 	if type(entry) == "table" and entry.message == text then return entry end
 end
 
@@ -211,6 +214,7 @@ local rolls, rollByID, nextID = {}, {}, 0 -- item link -> its roll (the newest),
 
 local function RollFor(item, create)
 	local roll = rolls[item]
+	-- (a choice after a finished roll starts the item's next roll; a stale roll is forgotten)
 	if roll and (roll.done and create == "new" or GetTime() - roll.at > ROLL_KEEP) then roll = nil end
 	if not roll and create then
 		nextID = nextID + 1
@@ -277,6 +281,7 @@ end
 -- The winner's "receives loot" right after a roll: already said on the roll's line.
 local function WonAlready(said)
 	local roll = rolls[said.item]
+	-- (30 s: the loot line follows the win at once, a later one is new loot)
 	return roll and roll.winner == said.who and roll.wonAt and GetTime() - roll.wonAt < 30 or false
 end
 
@@ -286,7 +291,7 @@ local heard = {} -- lineID -> what it said (the state moved once, every window t
 local function OnLootEvent(frame, _, text, ...)
 	if not (ns.On("chat") and ns.On("loot")) then return false end
 	if type(text) ~= "string" or IsSecret(text) or type(frame) ~= "table" or not frame.AddMessage then return false end
-	local lineID = select(10, ...)
+	local lineID = select(10, ...) -- (the event's lineID, the same in every window)
 	if IsSecret(lineID) then lineID = nil end
 	local said, roll
 	if lineID ~= nil and heard[lineID] then
@@ -296,6 +301,7 @@ local function OnLootEvent(frame, _, text, ...)
 		if not said then return false end
 		if said.kind ~= "loot" then roll = UpdateRoll(said, lineID) end
 		if lineID ~= nil then
+			-- (only the newest kept: the windows hear a sentence one after another, before the next comes)
 			wipe(heard)
 			heard[lineID] = { said = said, roll = roll }
 		end
@@ -334,6 +340,7 @@ local function Coins(text)
 end
 ns.LootCoins = Coins -- (tests)
 
+-- (the game's format by its name; true: an English sentence as it stands, for the ones without a name here)
 local REPUTATION = {
 	{ "FACTION_STANDING_INCREASED", 1 }, { "FACTION_STANDING_DECREASED", -1 },
 	{ "Reputation with %s increased by %d.", 1, true }, { "Reputation with %s decreased by %d.", -1, true },
@@ -395,7 +402,7 @@ local function OnGainsEvent(frame, event, text)
 		copper = Coins(text)
 		if not copper then return false end
 	elseif kind == "xp" then
-		xp = tonumber(text:match("(%d+)"))
+		xp = tonumber(text:match("(%d+)")) -- (the first number: the gain, before any rested bonus)
 		if not xp then return false end
 	elseif kind == "rep" then
 		faction, amount = Reputation(text)

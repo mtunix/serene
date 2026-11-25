@@ -21,6 +21,7 @@ test("every captured chat line goes through Serene's chat without an error", fun
 	local lines = 0
 	for event, list in pairs(chat) do
 		for _, args in ipairs(list) do
+			-- (padded to the 17 a chat event can carry; what Capture couldn't save is false)
 			wow.say(event, unpack(args, 1, 17))
 			lines = lines + 1
 		end
@@ -85,6 +86,7 @@ test("every captured item tooltip goes through Serene's tooltip without an error
 	for id, tip in pairs(tips) do
 		local data = { type = Enum.TooltipDataType.Item, id = id, lines = {} }
 		GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+		-- (Capture saves a missing value as false: nil again here)
 		for index, line in ipairs(tip.lines) do
 			data.lines[index] = { leftText = line.left or nil, rightText = line.right or nil, type = line.type or nil,
 				price = line.price or nil }

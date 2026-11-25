@@ -10,7 +10,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 --   Quiet labels, soft values; gold or red only when something wants you (bags nearly full, gear breaking).
 -- * Each word has its tooltip (Serene's glass) and a click: the world map, bags, calendar... The mouse wheel over
 --   the volume changes it.
--- * Right click: which words it shows. Shift and drag: move it (the menu puts it back in the middle).
+-- * Right click: which words it shows (with Shift on the queue and the clock, which keep their own). Shift and
+--   drag: move it (the menu puts it back in the middle).
 -- When it shows is Fade.lua's: like the menu and bags, it rests away and comes back under the mouse (worn gear or
 -- full bags, or a queue, bring it back too); or away in fights only, or always (/serene top hover|calm|always).
 -- /serene top on|off
@@ -19,7 +20,7 @@ local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local INK = ns.INK
 local GOLD = { 1, 0.82, 0.35 }
 local SOFT = ns.SOFT_RGB
-local HEIGHT, FADE, PAD, GAP = 20, 36, 6, 9
+local HEIGHT, FADE, PAD, GAP = 20, 36, 6, 9 -- the band's height, each fading end, a word's side room, to the dot
 local SIZE = 11
 local EVERY = 0.5 -- seconds between two looks at the words
 
@@ -147,6 +148,7 @@ local function BagSpace()
 		if slots > 0 then
 			local open, kind = Safe(get, bag)
 			open, kind = Clean(open) or 0, Clean(kind) or 0
+			-- (ordinary bags counted; quivers and soul bags listed on their own)
 			if kind == 0 then
 				free, total = free + open, total + slots
 			else
@@ -165,7 +167,7 @@ end
 
 -- Durability ---------------------------------------------------------------------------------------------------------
 
-local SLOTS = { 1, 3, 5, 6, 7, 8, 9, 10, 16, 17, 18 }
+local SLOTS = { 1, 3, 5, 6, 7, 8, 9, 10, 16, 17, 18 } -- what can wear down: the armour, both weapons, ranged
 
 local function Worn()
 	local lowest, pieces = nil, {}
@@ -198,6 +200,7 @@ local function RepairCost(slot)
 	end
 	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 	scan:ClearLines()
+	-- (the old tooltip gives the repair cost as its third answer)
 	local _, _, cost = Safe(scan.SetInventoryItem, scan, "player", slot)
 	scan:Hide()
 	return Clean(cost) or 0
@@ -205,6 +208,7 @@ end
 
 -- Loot ---------------------------------------------------------------------------------------------------------------
 
+-- (by name from the old call, by number from C_PartyInfo)
 local LOOT = {
 	freeforall = "Free for all", roundrobin = "Round robin", master = "Master looter", group = "Group loot",
 	needbeforegreed = "Need before greed", personal = "Personal",
@@ -250,6 +254,7 @@ local function Coordinates()
 	if type(position) ~= "table" or not position.GetXY then return nil end
 	local x, y = Safe(position.GetXY, position)
 	x, y = Clean(x), Clean(y)
+	-- (0, 0: no position here, as in an instance)
 	if type(x) ~= "number" or type(y) ~= "number" or (x == 0 and y == 0) then return nil end
 	return x * 100, y * 100
 end
@@ -332,7 +337,7 @@ local function Queues()
 			end
 		end
 	end
-	-- (the eye shown, the game's reason unknown here)
+	-- (the eye shown, the game's reason unknown here; not when it is only for a group you are in already)
 	if #list == 0 and not grouped and ns.QueueShown and ns.QueueShown() then
 		list[#list + 1] = { name = "Group finder", state = "searching" }
 	end
@@ -723,6 +728,7 @@ local function MakeItem(key)
 	item.key = key
 	local def = DEF[key]
 	item:SetScript("OnClick", function(self, button)
+		-- (the release of a drag is not a click)
 		if GetTime() - (self.droppedAt or 0) < 0.2 then return end
 		if button == "RightButton" and (not def.rightClick or IsShiftKeyDown()) then return ToggleMenu(self) end
 		if def.click then def.click(button) end
@@ -835,6 +841,7 @@ local function MakeBar()
 	bar:SetFrameStrata("LOW")
 	bar:SetClampedToScreen(true)
 	bar:SetMovable(true)
+	-- (only its words take the mouse, never the glass)
 	bar:EnableMouse(false)
 	local DARK = 0.62
 	local middle = bar:CreateTexture(nil, "BACKGROUND")

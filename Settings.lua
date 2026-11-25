@@ -281,9 +281,9 @@ local function Slider(column, text, path, low, high, step, show, opts)
 	fill:SetPoint("LEFT", slider, "LEFT", 0, 0)
 	fill:SetPoint("RIGHT", thumb, "CENTER", 0, 0)
 	row.slider = slider
-	local quiet = false
+	local quiet = false -- (Update moving the slider: not a change by the player)
 	slider:SetScript("OnValueChanged", function(_, value)
-		value = math.floor(value / step + 0.5) * step
+		value = math.floor(value / step + 0.5) * step -- (a drag lands between steps)
 		row.value:SetText(show(value))
 		if quiet then return end
 		Set(path, value)
@@ -539,7 +539,7 @@ local PAGES = {
 		Header(left, "Your buffs")
 		Toggle(left, "Serene's buffs and debuffs", "auras", { note = "reload", reload = true })
 		Choice(left, "Shown in", "auraFrame", { { "serene", "Serene's frame" }, { "game", "The game's, restyled" } },
-			{ depends = on, after = function() needsReload = true end })
+			{ depends = on, after = function() needsReload = true end }) -- (a Choice has no reload option)
 		Slider(left, "Size", "auraSize", 20, 48, 1, function(v) return ("%d"):format(v) end, { depends = own })
 		Slider(left, "In a row", "auraPerRow", 4, 20, 1, function(v) return ("%d"):format(v) end, { depends = own })
 		Choice(left, "Icons", "auraShape", { { "round", "Round" }, { "square", "Square" } }, { depends = on })
@@ -774,7 +774,7 @@ local function Build()
 	reloadButton = CreateFrame("Button", nil, canvas)
 	reloadButton:SetSize(150, 22)
 	reloadButton:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", -16, -20)
-	reloadButton:SetFrameLevel(panel:GetFrameLevel() + 10)
+	reloadButton:SetFrameLevel(panel:GetFrameLevel() + 10) -- (above the scrolling page)
 	reloadButton.ground = reloadButton:CreateTexture(nil, "BACKGROUND")
 	reloadButton.ground:SetTexture(MEDIA .. "Pill")
 	reloadButton.ground:SetAllPoints()
@@ -784,6 +784,7 @@ local function Build()
 	reloadButton:SetScript("OnClick", function() ReloadUI() end)
 	reloadButton:Hide()
 
+	-- (every row calls Apply through this local, so from now on each change shows or hides the button)
 	local base = Apply
 	Apply = function()
 		base()
@@ -811,7 +812,7 @@ local function Window()
 	ground:SetColorTexture(INK[1], INK[2], INK[3], 0.94)
 	local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", window, "TOPRIGHT", -2, -2)
-	tinsert(UISpecialFrames, "SereneSettingsWindow")
+	tinsert(UISpecialFrames, "SereneSettingsWindow") -- (Escape closes it)
 	canvas:SetParent(window)
 	canvas:ClearAllPoints()
 	canvas:SetAllPoints(window)
@@ -830,6 +831,7 @@ function ns.OpenSettings(key)
 		return
 	end
 	if _G.InterfaceOptionsFrame_OpenToCategory and canvas.parent == nil and canvas.registered then
+		-- (twice: the first call only opens the Options, the second finds the page)
 		Safe(_G.InterfaceOptionsFrame_OpenToCategory, canvas)
 		Safe(_G.InterfaceOptionsFrame_OpenToCategory, canvas)
 		return
