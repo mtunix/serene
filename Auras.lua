@@ -1128,11 +1128,23 @@ function ns.AuraMouseDump()
 end
 
 -- /serene debug: what was found.
+-- (the plates up, and how many of them the game keeps from addons: those Serene can't dress)
+local function PlatesUp()
+	local all = C_NamePlate and C_NamePlate.GetNamePlates and Safe(C_NamePlate.GetNamePlates, true)
+	local up, forbidden = 0, 0
+	for _, plate in ipairs(type(all) == "table" and all or {}) do
+		up = up + 1
+		if Safe(function() return plate:IsForbidden() end) == true then forbidden = forbidden + 1 end
+	end
+	return up, forbidden
+end
+
 function ns.AurasDebug()
 	if not active then return ns.Print("auras: off") end
-	ns.Print(("auras: %d of yours, %d on the target and focus%s, %d on nameplates%s, %d borders made hairlines")
-		:format(count.player, count.unit, onUnits and "" or " (off)", count.plate, onPlates and "" or " (off)",
-		count.borders))
+	local up, forbidden = PlatesUp()
+	ns.Print(("auras: %d of yours, %d on the target and focus%s, %d on nameplates%s (%d plates up, %d forbidden), %d borders made hairlines")
+		:format(count.player, count.unit, onUnits and "" or " (off)", count.plate, onPlates and "" or " (off)", up,
+		forbidden, count.borders))
 end
 
 table.insert(ns.modules, { init = Init, refresh = Refresh })

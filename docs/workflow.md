@@ -103,7 +103,7 @@ Most problems on this client only appear in a fight, because of secret values an
 | Swing | frames found and how, the CVar, attack state, speeds |
 | Units | per frame: art, badges, emblems, portrait, side |
 | CastBar | bars dressed and the game's fades found on each; your lag, measured or the game's |
-| Auras | buttons dressed (yours, target/focus, plates) |
+| Auras | buttons dressed (yours, target/focus, plates); the nameplates up and how many of them are forbidden (out of addons' reach) |
 | AuraFrame | Serene's buff frame or why it isn't used; counts per group; missing buffs; known short buffs; what you can dispel |
 | UnitAuras | target/focus containers made, or why not |
 | Bags | shown state, protected buttons, bank tab inventory slots by index and by id |
