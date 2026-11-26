@@ -435,7 +435,17 @@ local function RowHeight(d)
 	return math.ceil(math.max(FontSize(d.nameText) or 0, FontSize(d.levelText) or 0, 10) + 1)
 end
 
+-- A part the game protects (the target's target's bars, hanging from its secure frame) can't be moved in a fight:
+-- left where it is, and the card laid out again once the fight is over (`blocked`, read at the end of Layout).
+local blocked = false
+local function Movable(region)
+	if not InCombatLockdown() or not Clean(Safe(region.IsProtected, region)) then return true end
+	blocked = true
+	return false
+end
+
 local function Place(region, ...)
+	if not Movable(region) then return end
 	holding = true
 	pcall(region.ClearAllPoints, region)
 	local points = { ... }
@@ -444,6 +454,7 @@ local function Place(region, ...)
 end
 
 local function Size(region, width, height)
+	if not Movable(region) then return end
 	holding = true
 	if width then pcall(region.SetWidth, region, width) end
 	if height then pcall(region.SetHeight, region, height) end
@@ -629,6 +640,8 @@ local function Layout(d)
 	local pd = d.compact and dressed[_G[PARENT_OF[d.name]] or false]
 	if d.compact and not (pd and pd.spine and pd.below) then return end -- (placed from the target's card: that first)
 	d.dirty = false
+	d.later = false
+	blocked = false
 	-- (first, as the game drew it: which side the portrait is on, what sits around the level)
 	if not d.measured then
 		d.measured = true
@@ -833,6 +846,7 @@ local function Layout(d)
 	end
 	local owner = d.compact and pd or d
 	if owner.cast then pcall(LayoutCast, owner) end
+	if blocked then d.later = true end
 end
 
 -- The game moving a part, or the bars changing size or showing the power bar: laid out again at the next look.

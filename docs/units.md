@@ -42,7 +42,7 @@ Fade fades a card through its frame's alpha, but the game applies that alpha to 
 
 The pet's health bar is anchored to the pet's portrait, so anchoring the portrait to the bar would make a loop that makes the frame disappear (see [forever-client.md](forever-client.md)). Before the portrait is moved, the health bar is therefore re-hung from the frame at the offset it had (`d.healthAt`). Look for this kind of loop whenever you anchor one of the game's regions to another.
 
-The target of target is a secure unit frame, so it can only be moved out of combat. `MoveCompact` returns early in combat and sets `d.later`; `PLAYER_REGEN_ENABLED` marks those cards dirty and they're placed then. It's anchored to TargetFrame itself rather than to anything Serene moves, since a protected frame must never hang from something that moves in a fight.
+The target of target is a secure unit frame, so it can only be moved out of combat. `MoveCompact` returns early in combat and sets `d.later`; `PLAYER_REGEN_ENABLED` marks those cards dirty and they're placed then. Its bars are protected in a fight too, and the game moves them now and then, which would start a layout: `Place` and `Size` leave a part alone while it reports `IsProtected` in combat, and `Layout` then sets `d.later` so the card is laid out again once the fight ends. It's anchored to TargetFrame itself rather than to anything Serene moves, since a protected frame must never hang from something that moves in a fight.
 
 ### Elite dragon and PvP crest
 

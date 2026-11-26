@@ -16,7 +16,8 @@ In combat the client hands addons secret values: values that can be passed on to
 - other units' aura data, including the icons' textures;
 - health and power in some cases, and the values behind heal prediction;
 - frame sizes: `GetWidth` and `GetHeight` can return a secret, and so can an AuraContainer's size;
-- `IsShown` on aura buttons.
+- `IsShown` on aura buttons;
+- the arguments the game passes to its own functions, which a `hooksecurefunc` hook receives: the heal prediction's `UpdateFillPosition` gets the region it hangs from as a secret. Indexing one inside the game's call is logged in `taint.log` as "An attempt to index a secret value was blocked because of taint from Serene", so `ns.IsRegion` refuses secrets before looking into a value.
 
 For the player's own auras it goes further than secrecy. In combat, `GetAuraDataByIndex`, `GetAuraSlots` and `GetUnitAuras` return nothing for the player and `GetAuraDataByAuraInstanceID` raises an error; out of combat all of it reads normally. The game's own BuffFrame and DebuffFrame keep updating in combat, but their buttons' `buttonInfo` only has a readable `index` and `auraType`; the instance ID, texture, count, duration and expiration are secret. The game also folds some buttons away and slots a new aura into the middle of its list rather than at the end, so the buttons can't be used to work out which aura is which.
 

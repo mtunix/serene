@@ -306,8 +306,11 @@ function ns.Clean(value)
 end
 
 -- One of the game's regions (a texture, a text...), and of which kind: for parts found by searching a frame's keys.
+-- (a secret one is never looked into: in a fight the game hands some over to hooks secret, and indexing one inside
+-- the game's own code gets Serene blocked)
 function ns.IsRegion(value)
-	return type(value) == "table" and type(value.GetObjectType) == "function" and type(value.SetAlpha) == "function"
+	return type(value) == "table" and not ns.IsSecret(value) and type(value.GetObjectType) == "function"
+		and type(value.SetAlpha) == "function"
 end
 
 function ns.IsTexture(region)

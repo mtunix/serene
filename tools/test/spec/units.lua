@@ -277,3 +277,38 @@ test("the target's target moves only out of a fight: in one, placed once it is o
 	eq(relative, TargetFrame, "placed from the target's frame once it is over")
 	clean()
 end)
+
+test("heal prediction handed a secret part in a fight: never looked into", function()
+	Portrait()
+	local health = TargetFrame.healthbar
+	local segment = CreateFrame("Frame", nil, health)
+	segment.FillMask = segment:CreateMaskTexture()
+	segment.Fill = segment:CreateTexture()
+	function segment:UpdateFillPosition() end
+	health.MyHealPredictionBar = segment
+	Login()
+	local before = { segment.FillMask:GetPoint(1) }
+	no(ns.IsRegion(wow.secret(health:GetStatusBarTexture())), "a secret is no region")
+	segment:UpdateFillPosition(wow.secret(health:GetStatusBarTexture()), nil, wow.secret(0.25))
+	eq({ segment.FillMask:GetPoint(1) }, before, "left where it was")
+	clean()
+end)
+
+test("the target's target's bars, protected in a fight: left where the game puts them, laid out once it is over", function()
+	local bar = TargetFrameToT.healthbar
+	function bar:IsProtected() return wow.combat, false end
+	Login()
+	local placed = { bar:GetPoint(1) }
+	eq(bar:GetWidth() ~= 120, true, "laid out out of a fight")
+	wow.fight(true)
+	bar:ClearAllPoints()
+	bar:SetPoint("TOPLEFT", TargetFrameToT, "TOPLEFT", 5, -5)
+	bar:SetWidth(120)
+	wow.advance(0.5)
+	eq({ bar:GetPoint(1) }, { "TOPLEFT", TargetFrameToT, "TOPLEFT", 5, -5 }, "not moved in the fight")
+	eq(bar:GetWidth(), 120, "not sized in the fight")
+	wow.fight(false)
+	wow.advance(0.5)
+	eq({ bar:GetPoint(1) }, placed, "placed again once it is over")
+	clean()
+end)
