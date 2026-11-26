@@ -125,3 +125,18 @@ Serene's comments are part of its record of what was learnt. Follow the house st
 - **Restyle the game's frames, don't replace them.** Ask the user before replacing another game frame.
 - **Never pass the `"TRILINEAR"` filter to `SetTexture`**: it crashes this client on login.
 - **The user likes to be interviewed** with a few concrete questions before a big feature.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `mtunix/serene`, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, each label named as its role (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: the glossary in `docs/README.md`, decisions in `docs/adr/`. See `docs/agents/domain.md`.

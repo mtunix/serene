@@ -9,3 +9,6 @@ tree.json
 
 __pycache__/
 *.pyc
+
+# notes and findings kept locally (the agent skills; issues themselves are on GitHub)
+.scratch/
