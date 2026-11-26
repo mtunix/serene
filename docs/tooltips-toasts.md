@@ -56,7 +56,7 @@ The row is rewritten in place rather than a line being added because the game's 
 
 `ns.TipHint(tip, text)` adds one of Serene's how-to lines ("Click: ..."). They show when Shift is held, or on their own after `HINT_AFTER`. A tooltip built with `ns.ShowTip` remembers how it was built, so it can be rebuilt with its hints when that moment comes; `ns.TipLater(redo)` does the same for tooltips the game builds itself, such as `SetMerchantItem`.
 
-`Compare` turns the game's `alwaysCompareItems` setting off while `tooltip` is on, remembering the old value in `tipCompare` (and that it did so in `tipCompareDone`), and gives it back when `tooltip` is switched off. Comparison then only appears with Shift.
+`Compare` turns the game's `alwaysCompareItems` setting off while `tooltip` is on, remembering the old value in `tipCompare` (and that it did so in `tipCompareDone`), and gives it back when `tooltip` is switched off. Comparison then only appears with Shift. The comparison tooltips (`COMPARE`) are placed by the game edge to edge beside the tooltip they compare against; a hook on their `SetPoint` (`Apart`) sets those side anchors again `COMPARE_GAP` apart, under the `holding` flag. Their "Equipped" tab (`CompareHeader`) is dressed by `Header`, called from `Dress`, into a band of the tooltip's glass along its top: its art away, anchored to both of the tooltip's top corners (so the width the game sets to fit the words gives way), and sitting on the edge rather than reaching into the tooltip, so the two panes meet without a darker seam. On it are the worn item's icon, round in a gold ring (masked by `Media/WornDisc`, a soft disc baked for its 14px, with the same disc in gold a pixel wider behind it), and the words, small and in a soft gold, in line with the tooltip's own, with a faint line under them from that margin to the end of the words. `Worn` takes the icon from the comparison's data in `OnData` and `Lay` places icon, words and line. Band and tooltip read as one frame: `Join` moves the tooltip's gold hairline up to the band's top. The tab stays the game's own frame; its words alone, without glass, were lost on bright ground. Switched off, the tab is given back as the game made it.
 
 ### The player card
 
@@ -74,7 +74,7 @@ With `tipcard` on, `Card` turns a player's tooltip into a card. It rewrites line
 
 ### What it depends on
 
-Tooltip.lua relies on the `<Tooltip>TextLeftN`/`TextRightN` globals and on the game's private `shownMoneyFrames` and `numMoneyFrames` fields. It keeps its own parts on the tooltips under `serene*` keys (`sereneGlass`, `sereneHair`, `sereneRim`, `sereneCue`, `sereneCard`, and the two price-row fields above). `Move` puts addon lines' text on other line indices for the card, which would confuse an addon that later edits "its" line by index. `ACTION_NAMES` lists the button names of the game, Bartender, Dominos and ElvUI.
+Tooltip.lua relies on the `<Tooltip>TextLeftN`/`TextRightN` globals and on the game's private `shownMoneyFrames` and `numMoneyFrames` fields. It keeps its own parts on the tooltips under `serene*` keys (`sereneGlass`, `sereneHair`, `sereneRim`, `sereneCue`, `sereneTab` and `sereneWorn` on the comparisons' band, `sereneCard`, and the two price-row fields above). `Move` puts addon lines' text on other line indices for the card, which would confuse an addon that later edits "its" line by index. `ACTION_NAMES` lists the button names of the game, Bartender, Dominos and ElvUI.
 
 ## Toasts.lua
 

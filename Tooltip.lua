@@ -10,7 +10,9 @@ local Safe, Clean = ns.Safe, ns.Clean
 -- * Quiet colours: the first line keeps its colour (an item's quality, a class, friend or foe); the other white
 --   lines turn warm white, the game's yellow a muted gold; a unit's faction and PvP lines grey, "(Player)" dropped.
 -- * How-to lines (Serene's "Click: ...", Alt-click at merchants) only with Shift held, or after a moment.
--- * Item comparison only with Shift (the game's setting, given back when this is switched off).
+-- * Item comparison only with Shift (the game's setting, given back when this is switched off), a little apart from
+--   the item's tooltip; instead of the game's tab, a band of the same glass along its top, the worn item's icon
+--   round and "Equipped" in small soft gold on it, faintly underlined.
 -- * In a fight (tipcalm): the tooltips of the world (units, objects) and of the action bars wait; Shift or the key
 --   "show the whole interface" shows them. Enemies, chat links, your portrait, your bags still show.
 -- * What addons add under an item (prices, recipes, sources...) waits for Shift (tipmore): the tooltip ends after
@@ -32,17 +34,29 @@ local BAR_HEIGHT, BAR_ALPHA = 2, 0.55
 local QUIET_GOLD = { 0.84, 0.74, 0.48 }
 local INK, SOFT_RGB, MUTED_RGB = ns.INK, ns.SOFT_RGB, ns.MUTED_RGB
 local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
+local WORN_DISC = MEDIA .. "WornDisc" -- (a soft disc baked for the worn item's icon on the comparison's band)
 local RIGHT_GAP = 16        -- room between a line's left and right words
 local CUE_ROOM = 10         -- room at the bottom for the "Shift" in the corner
 local RACE_SIZE, CLASS_SIZE = 30, 18
 local CLASS_OUT = 5         -- how far the class badge reaches beyond the race icon (right, and down)
 local CARD_GAP = 9          -- room between the icons and the words
+local COMPARE_GAP = 4       -- room between an item's tooltip and the comparison beside it
+local HEADER_HEIGHT, HEADER_GAME_HEIGHT = 24, 22 -- "Equipped"'s band: Serene's, the game's tab
+local HEADER_PAD = 10       -- the band's words in line with the tooltip's
+local WORN_SIZE, WORN_GAP = 14, 4 -- the worn item's icon, the room after it
+local WORN_RING = 1         -- the gold ring around it, in screen pixels
+local UNDERLINE = { ns.LINE[1], ns.LINE[2], ns.LINE[3], 0.22 } -- the faint line under "Equipped"
 local FACTION_RING = { Alliance = { 0.28, 0.55, 1 }, Horde = { 0.92, 0.2, 0.16 } }
 local NEUTRAL_RING = { 0.6, 0.6, 0.6 }
 
 -- (the tooltips of what is shown as an icon: in a hairline of gold. Names missing on this client are skipped.)
 local ICON_KINDS = { "Item", "Spell", "UnitAura", "Macro", "PetAction", "Totem", "Toy", "Mount" }
 local SIDES = { "top", "bottom", "left", "right" }
+
+-- (the comparison tooltips: placed beside the tooltip they compare against, "Equipped" over them)
+local COMPARE = { "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefShoppingTooltip1", "ItemRefShoppingTooltip2" }
+-- (the game sets a comparison beside another edge to edge: the offset that puts a little room between them)
+local APART = { RIGHT = { LEFT = -1 }, LEFT = { RIGHT = 1 }, TOPRIGHT = { TOPLEFT = -1 }, TOPLEFT = { TOPRIGHT = 1 } }
 
 local STYLED = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefShoppingTooltip1",
 	"ItemRefShoppingTooltip2" }
@@ -57,6 +71,7 @@ local MENU_NAMES = { "MicroButton$", "^CharacterBag%dSlot", "^MainMenuBarBackpac
 
 local tip = GameTooltip
 local fighting = false
+local holding = false -- (Serene's own calls, not heard by its hooks)
 local state = {
 	owner = nil,     -- the frame the tooltip is shown for (nil: none, the next one comes fresh)
 	since = 0,       -- when it came
@@ -83,13 +98,163 @@ end
 
 -- The look -------------------------------------------------------------------------------------------------------
 
+-- A comparison with its "Equipped" band up: band and tooltip one frame, the tooltip's hairline going round both.
+local function Join(tooltip)
+	local rim = tooltip.sereneRim
+	local header = rawget(tooltip, "CompareHeader")
+	local tab = type(header) == "table" and header.sereneTab
+	if not (rim and tab) then return end
+	local joined = tab.glass:IsShown() and Clean(Safe(header.IsShown, header)) and true or false
+	local top = joined and header or tooltip
+	local px = ns.Pixel(tooltip)
+	rim.top:ClearAllPoints()
+	rim.top:SetPoint("TOPLEFT", top, "TOPLEFT")
+	rim.top:SetPoint("TOPRIGHT", top, "TOPRIGHT")
+	rim.left:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -px)
+	rim.right:SetPoint("TOPRIGHT", top, "TOPRIGHT", 0, -px)
+end
+
+
+-- The band's insides: the worn item's icon (when known), the words after it, the faint line under both.
+local function Lay(header)
+	local tab, label = header.sereneTab, rawget(header, "Label")
+	if not (tab and tab.glass:IsShown()) then return end
+	local texture = header.sereneWorn
+	if texture then tab.icon:SetTexture(texture) end
+	local ring = WORN_SIZE + 2 * WORN_RING * ns.Pixel(header)
+	tab.ring:SetSize(ring, ring)
+	tab.icon:SetShown(texture ~= nil)
+	tab.ring:SetShown(texture ~= nil)
+	label:ClearAllPoints()
+	if texture then
+		label:SetPoint("LEFT", tab.icon, "RIGHT", WORN_GAP, 0)
+	else
+		label:SetPoint("LEFT", header, "LEFT", HEADER_PAD, 0)
+	end
+	local words = Clean(Safe(label.GetStringWidth, label)) or Clean(Safe(label.GetWidth, label)) or 0
+	tab.underline:SetWidth(math.max(1, (texture and WORN_SIZE + WORN_GAP or 0) + words))
+	tab.underline:SetHeight(ns.Pixel(header))
+end
+
+-- A comparison's "Equipped": a band of the tooltip's glass along its top, as wide as it, the tooltip's hairline of
+-- gold going round both; on it the worn item's icon round and the words small in soft gold, a faint line under them
+-- from the tooltip's margin to the end of the words. The game's tab art away (its words alone were lost on bright
+-- ground); given back when off. The band is the game's own tab frame, dressed.
+local function Header(tooltip, on)
+	local header = rawget(tooltip, "CompareHeader")
+	local label = type(header) == "table" and rawget(header, "Label")
+	if not (ns.IsFontString(label) and header.GetRegions and header.CreateTexture) then return end
+	local tab = header.sereneTab
+	if on and not tab then
+		local glass = header:CreateTexture(nil, "BACKGROUND", nil, -8)
+		glass:SetAllPoints(header)
+		glass:SetColorTexture(INK[1], INK[2], INK[3], GLASS)
+		tab = { glass = glass }
+		tab.underline = header:CreateTexture(nil, "BORDER")
+		tab.underline:SetColorTexture(UNDERLINE[1], UNDERLINE[2], UNDERLINE[3], UNDERLINE[4])
+		tab.underline:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", HEADER_PAD, 0)
+		-- (the icon masked by a disc baked for this size, its edge fading over about a screen pixel, and the same disc
+		-- in gold a little wider behind it as the ring: both edges soft. The card's badge textures, made for
+		-- larger circles, were jagged this small.)
+		local mask
+		tab.icon = header:CreateTexture(nil, "ARTWORK", nil, 1)
+		tab.icon:SetSize(WORN_SIZE, WORN_SIZE)
+		tab.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- (the icon's own border cut away)
+		tab.icon:SetPoint("LEFT", header, "LEFT", HEADER_PAD, 0)
+		if header.CreateMaskTexture and tab.icon.AddMaskTexture then
+			mask = header:CreateMaskTexture()
+			mask:SetTexture(WORN_DISC, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+			mask:SetAllPoints(tab.icon)
+			tab.icon:AddMaskTexture(mask)
+		end
+		tab.ring = header:CreateTexture(nil, "ARTWORK", nil, 0)
+		tab.ring:SetTexture(WORN_DISC)
+		tab.ring:SetVertexColor(ns.LINE[1], ns.LINE[2], ns.LINE[3], 1)
+		tab.ring:SetPoint("CENTER", tab.icon, "CENTER")
+		-- (small and round: smooth only off the pixel grid)
+		for _, region in ipairs({ tab.icon, tab.ring }) do
+			pcall(region.SetSnapToPixelGrid, region, false)
+			pcall(region.SetTexelSnappingBias, region, 0)
+		end
+		tab.mine = { [glass] = true, [tab.underline] = true, [tab.icon] = true, [tab.ring] = true }
+		if mask then tab.mine[mask] = true end
+		header.sereneTab = tab
+	end
+	for _, region in ipairs({ header:GetRegions() }) do
+		if region ~= label and ns.IsTexture(region) and not (tab and tab.mine[region]) then
+			region:SetAlpha(on and 0 or 1)
+		end
+	end
+	if tab then
+		tab.glass:SetShown(on)
+		tab.underline:SetShown(on)
+		if not on then
+			tab.icon:Hide()
+			tab.ring:Hide()
+		end
+	end
+	header:SetHeight(on and HEADER_HEIGHT or HEADER_GAME_HEIGHT)
+	-- (the game's tab reaches a unit into the tooltip and is as wide as its words; Serene's band sits on the
+	-- tooltip's edge, as wide as it, so the two panes meet without a darker seam. The width the game sets each time
+	-- gives way to the two anchors.)
+	header:ClearAllPoints()
+	header:SetPoint("BOTTOMLEFT", tooltip, "TOPLEFT", 0, on and 0 or -1)
+	if on then header:SetPoint("BOTTOMRIGHT", tooltip, "TOPRIGHT", 0, 0) end
+	if on then
+		label:SetFontObject(_G.GameFontHighlightSmall)
+		label:SetTextColor(QUIET_GOLD[1], QUIET_GOLD[2], QUIET_GOLD[3])
+		Lay(header)
+	else
+		label:SetFontObject(_G.GameTooltipText)
+		local gold = _G.NORMAL_FONT_COLOR
+		if gold then label:SetTextColor(gold.r, gold.g, gold.b) end
+		label:ClearAllPoints()
+		label:SetPoint("CENTER", header, "CENTER")
+		local words = Clean(Safe(label.GetStringWidth, label))
+		if words then header:SetWidth(words + 30) end -- (the game's own width for its tab)
+	end
+	Join(tooltip)
+end
+
+-- The item a comparison shows is the one worn: its icon for the tab.
+local function Worn(tooltip, data)
+	local header = rawget(tooltip, "CompareHeader")
+	if type(header) ~= "table" then return end
+	local id = type(data) == "table" and Clean(data.id)
+	local texture = id and C_Item and Clean(Safe(C_Item.GetItemIconByID, id))
+	if not texture then
+		local _, link = Safe(tooltip.GetItem, tooltip)
+		link = Clean(link)
+		if link then texture = Clean(select(5, Safe(GetItemInfoInstant, link))) end
+	end
+	header.sereneWorn = texture
+	Lay(header)
+end
+
+-- A comparison set edge to edge beside another tooltip: moved a little apart. (`point`...: the game's SetPoint)
+local function Apart(tooltip, point, relative, relativePoint, x)
+	if holding or not ns.On("tooltip") then return end
+	point, relativePoint, x = Clean(point), Clean(relativePoint), Clean(x)
+	local side = type(point) == "string" and APART[point]
+	local sign = side and type(relativePoint) == "string" and side[relativePoint]
+	if not sign or (x ~= nil and x ~= 0) then return end
+	relative = Clean(relative)
+	if type(relative) ~= "table" then return end
+	holding = true
+	pcall(tooltip.SetPoint, tooltip, point, relative, relativePoint, sign * COMPARE_GAP, 0)
+	holding = false
+end
+
 -- An icon's tooltip in a hairline of the game's gold, which takes the faint line's place on top.
 local function Rim(tooltip, on)
 	local rim = tooltip.sereneRim
 	if not rim then return end
 	on = on and ns.On("tooltip") or false
 	rim.on = on
-	if on then rim:Fit() end -- (one pixel at the tooltip's own scale, which the game changes for some owners)
+	if on then
+		rim:Fit() -- (one pixel at the tooltip's own scale, which the game changes for some owners)
+		Join(tooltip)
+	end
 	for _, side in ipairs(SIDES) do rim[side]:SetShown(on) end
 	tooltip.sereneHair:SetShown(ns.On("tooltip") and not on)
 end
@@ -128,6 +293,7 @@ local function Dress(tooltip, on)
 			if edge then pcall(tooltip.SetBackdropBorderColor, tooltip, edge.r, edge.g, edge.b) end
 		end
 	end
+	Header(tooltip, on)
 end
 
 -- The health bar under a unit: a thin, dim line.
@@ -876,6 +1042,7 @@ local function OnData(tooltip, data, as)
 	local unit = as == "unit" or (types and kind ~= nil and kind == types.Unit) or false
 	local item = as == "item" or (types and kind ~= nil and kind == types.Item) or false
 	Rim(tooltip, item or as == "spell" or Iconic(kind, types))
+	if item then Worn(tooltip, data) end
 	local priced, added
 	if item then priced, added = VendorPrice(tooltip, data) end
 	-- (a card only on GameTooltip; one that cannot be made falls back to quiet colours)
@@ -1069,6 +1236,11 @@ local function Init()
 		if tooltip ~= tip and tooltip.SetPoint then
 			hooksecurefunc(tooltip, "SetPoint", function(self) Pass(self, true) end)
 		end
+	end
+
+	for _, name in ipairs(COMPARE) do
+		local tooltip = _G[name]
+		if type(tooltip) == "table" and tooltip.SetPoint then hooksecurefunc(tooltip, "SetPoint", Apart) end
 	end
 
 	hooksecurefunc(tip, "SetOwner", function(_, owner)
