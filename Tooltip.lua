@@ -3,7 +3,8 @@ local Safe, Clean = ns.Safe, ns.Clean
 
 -- Calm tooltips.                                                           (/serene tooltip on|off, tipcalm on|off)
 -- * Glass: the game's frame and border gone, a dark pane like the chat's behind the words, a faint hairline on top;
---   the health bar under a unit a thin, dim line.
+--   the health bar under a unit a thin, dim line. What is shown as an icon (an item, a spell, a buff or debuff) is in
+--   a hairline of the game's gold all round instead.
 -- * A soft arrival: a tooltip fades in instead of popping up. Over the action bars, the menu and the bags it waits a
 --   moment first, so the mouse passing over a row of buttons brings nothing.
 -- * Quiet colours: the first line keeps its colour (an item's quality, a class, friend or foe); the other white
@@ -38,6 +39,10 @@ local CLASS_OUT = 5         -- how far the class badge reaches beyond the race i
 local CARD_GAP = 9          -- room between the icons and the words
 local FACTION_RING = { Alliance = { 0.28, 0.55, 1 }, Horde = { 0.92, 0.2, 0.16 } }
 local NEUTRAL_RING = { 0.6, 0.6, 0.6 }
+
+-- (the tooltips of what is shown as an icon: in a hairline of gold. Names missing on this client are skipped.)
+local ICON_KINDS = { "Item", "Spell", "UnitAura", "Macro", "PetAction", "Totem", "Toy", "Mount" }
+local SIDES = { "top", "bottom", "left", "right" }
 
 local STYLED = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefShoppingTooltip1",
 	"ItemRefShoppingTooltip2" }
@@ -78,6 +83,17 @@ end
 
 -- The look -------------------------------------------------------------------------------------------------------
 
+-- An icon's tooltip in a hairline of the game's gold, which takes the faint line's place on top.
+local function Rim(tooltip, on)
+	local rim = tooltip.sereneRim
+	if not rim then return end
+	on = on and ns.On("tooltip") or false
+	rim.on = on
+	if on then rim:Fit() end -- (one pixel at the tooltip's own scale, which the game changes for some owners)
+	for _, side in ipairs(SIDES) do rim[side]:SetShown(on) end
+	tooltip.sereneHair:SetShown(ns.On("tooltip") and not on)
+end
+
 local function Dress(tooltip, on)
 	if type(tooltip) ~= "table" or not tooltip.CreateTexture then return end
 	if on and not tooltip.sereneGlass then
@@ -89,11 +105,14 @@ local function Dress(tooltip, on)
 		hair:SetPoint("TOPLEFT", tooltip, "TOPLEFT", 0, 0)
 		hair:SetPoint("TOPRIGHT", tooltip, "TOPRIGHT", 0, 0)
 		hair:SetColorTexture(1, 1, 1, HAIR)
-		tooltip.sereneGlass, tooltip.sereneHair = glass, hair
+		local rim = ns.Hairline(tooltip, ns.LINE, "BORDER")
+		for _, side in ipairs(SIDES) do rim[side]:Hide() end
+		tooltip.sereneGlass, tooltip.sereneHair, tooltip.sereneRim = glass, hair, rim
 	end
 	if tooltip.sereneGlass then
 		tooltip.sereneGlass:SetShown(on)
-		tooltip.sereneHair:SetShown(on)
+		tooltip.sereneHair:SetShown(on and not tooltip.sereneRim.on)
+		if not on then Rim(tooltip, false) end
 	end
 	local nine = tooltip.NineSlice
 	if type(nine) == "table" and nine.SetAlpha then
@@ -837,7 +856,18 @@ local function Card(tooltip, data)
 	return true
 end
 
--- The game's words written: quiet, cut short, a card. (`as`: "unit" or "item", where the game hands no data)
+-- Whether the game's data is about something shown as an icon.
+local function Iconic(kind, types)
+	kind = Clean(kind)
+	if kind == nil or not types then return false end
+	for _, name in ipairs(ICON_KINDS) do
+		if types[name] ~= nil and types[name] == kind then return true end
+	end
+	return false
+end
+
+-- The game's words written: quiet, cut short, a card, a gold rim. (`as`: "unit", "item" or "spell", where the game
+-- hands no data)
 local function OnData(tooltip, data, as)
 	if not styled[tooltip] then return end
 	Uncut(tooltip)
@@ -845,6 +875,7 @@ local function OnData(tooltip, data, as)
 	local kind = type(data) == "table" and data.type
 	local unit = as == "unit" or (types and kind ~= nil and kind == types.Unit) or false
 	local item = as == "item" or (types and kind ~= nil and kind == types.Item) or false
+	Rim(tooltip, item or as == "spell" or Iconic(kind, types))
 	local priced, added
 	if item then priced, added = VendorPrice(tooltip, data) end
 	-- (a card only on GameTooltip; one that cannot be made falls back to quiet colours)
@@ -1008,6 +1039,11 @@ local function Init()
 			tooltip:HookScript("OnShow", function(self)
 				if ns.On("tooltip") then Dress(self, true) end
 			end)
+			-- (the rim is the data's to give: a tooltip of plain words, a unit's, an object's has none)
+			if Safe(tooltip.HasScript, tooltip, "OnTooltipCleared") then
+				tooltip:HookScript("OnTooltipCleared", function(self) Rim(self, false) end)
+			end
+			tooltip:HookScript("OnHide", function(self) Rim(self, false) end)
 		end
 	end
 
@@ -1037,6 +1073,7 @@ local function Init()
 
 	hooksecurefunc(tip, "SetOwner", function(_, owner)
 		Uncut(tip)
+		Rim(tip, false)
 		if owner ~= state.owner then Fresh(owner) end
 	end)
 	hooksecurefunc(tip, "Show", function()

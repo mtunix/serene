@@ -212,6 +212,60 @@ test("calm tooltips off: no colours changed", function()
 	eq({ L(2):GetTextColor() }, { 1, 1, 1, 1 })
 end)
 
+-- The gold rim -------------------------------------------------------------------------------------------------------
+
+local function Rimmed(tooltip)
+	tooltip = tooltip or GameTooltip
+	local rim = tooltip.sereneRim
+	for _, side in ipairs({ "top", "bottom", "left", "right" }) do
+		if not (rim and rim[side]:IsShown()) then return false end
+	end
+	return not tooltip.sereneHair:IsShown()
+end
+
+test("an item's tooltip in a hairline of gold, the faint line gone", function()
+	Login()
+	ItemTip(2589, { row = "typed", price = 13 })
+	ok(Rimmed(), "rimmed")
+	eq(wow.state(GameTooltip.sereneRim.top).color, ns.LINE)
+	clean()
+end)
+
+test("a spell's and an aura's tooltips rimmed too", function()
+	Login()
+	Enum.TooltipDataType.UnitAura = Enum.TooltipDataType.UnitAura or 7
+	for _, kind in ipairs({ "Spell", "UnitAura" }) do
+		GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+		GameTooltip:AddLine("Power Word: Fortitude", 1, 1, 1)
+		PostCalls(GameTooltip, { type = Enum.TooltipDataType[kind], lines = {} })
+		GameTooltip:Show()
+		ok(Rimmed(), kind)
+		GameTooltip:Hide()
+	end
+	clean()
+end)
+
+test("a unit's tooltip and one of plain words: the faint line only", function()
+	Login({ tipcard = false })
+	GameTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
+	GameTooltip:AddLine("Hogger", 1, 0.1, 0.1)
+	PostCalls(GameTooltip, { type = Enum.TooltipDataType.Unit, lines = {} })
+	GameTooltip:Show()
+	no(Rimmed(), "unit")
+	ok(GameTooltip.sereneHair:IsShown(), "the faint line")
+	ItemTip(2589)
+	ns.ShowTip(CreateFrame("Button", nil, UIParent), function(tip) tip:AddLine("Bank") end)
+	no(Rimmed(), "words after an item")
+	clean()
+end)
+
+test("calm tooltips off: no rim", function()
+	Login({ tooltip = false })
+	ItemTip(2589)
+	eq(GameTooltip.sereneRim and GameTooltip.sereneRim.top:IsShown() or false, false)
+	clean()
+end)
+
 -- Coming softly, and waiting in a fight ----------------------------------------------------------------------------
 
 local function Over(owner)

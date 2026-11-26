@@ -24,7 +24,7 @@ The game then fills the tooltip line by line. When it reaches the "Sell Price" l
 
 Finally the game calls `Show`. The hook writes the current alpha, runs `Pass` to apply the cut, and starts `driver`, an OnUpdate frame that runs while the tooltip is visible. The driver steps the alpha toward 1 with `ns.Approach` over `FADE_IN` once the wait is over, re-applies cuts when Shift is pressed or released or a line arrives late, and after `HINT_AFTER` (1.2 s) rebuilds the tooltip with its how-to lines (`Redo`). When the tooltip hides, `OnHide` notes when it went, which is what `GRACE` measures from.
 
-Two other things are hooked at Init. Each styled tooltip's `OnShow` calls `Dress`, which hides the NineSlice border and adds a dark pane and a hairline on top; old backdrop-style tooltips get their backdrop colours cleared on every show, because the game sets them again on hide. And an events frame tracks the fight (`PLAYER_REGEN_DISABLED`/`ENABLED`) and the Shift key (`MODIFIER_STATE_CHANGED`), which brings back hint lines through `Redo`. `Refresh`, which Init also calls, applies the settings: it re-dresses the styled tooltips, thins the health bar under unit tooltips (`Bar`) and sets the comparison setting (`Compare`).
+Two other things are hooked at Init. Each styled tooltip's `OnShow` calls `Dress`, which hides the NineSlice border and adds a dark pane and a faint hairline on top; old backdrop-style tooltips get their backdrop colours cleared on every show, because the game sets them again on hide. A tooltip about something shown as an icon (an item, a spell, an aura, a macro, a pet action or a totem: `ICON_KINDS`) gets a 1px hairline of `ns.LINE` all round in place of the faint line. `OnData` turns it on from the data's type (`Rim`), and it goes again when the tooltip is cleared, hidden or given a new owner, so tooltips of plain words, units and objects never keep it. And an events frame tracks the fight (`PLAYER_REGEN_DISABLED`/`ENABLED`) and the Shift key (`MODIFIER_STATE_CHANGED`), which brings back hint lines through `Redo`. `Refresh`, which Init also calls, applies the settings: it re-dresses the styled tooltips, thins the health bar under unit tooltips (`Bar`) and sets the comparison setting (`Compare`).
 
 ### Calm in a fight
 
@@ -74,7 +74,7 @@ With `tipcard` on, `Card` turns a player's tooltip into a card. It rewrites line
 
 ### What it depends on
 
-Tooltip.lua relies on the `<Tooltip>TextLeftN`/`TextRightN` globals and on the game's private `shownMoneyFrames` and `numMoneyFrames` fields. It keeps its own parts on the tooltips under `serene*` keys (`sereneGlass`, `sereneHair`, `sereneCue`, `sereneCard`, and the two price-row fields above). `Move` puts addon lines' text on other line indices for the card, which would confuse an addon that later edits "its" line by index. `ACTION_NAMES` lists the button names of the game, Bartender, Dominos and ElvUI.
+Tooltip.lua relies on the `<Tooltip>TextLeftN`/`TextRightN` globals and on the game's private `shownMoneyFrames` and `numMoneyFrames` fields. It keeps its own parts on the tooltips under `serene*` keys (`sereneGlass`, `sereneHair`, `sereneRim`, `sereneCue`, `sereneCard`, and the two price-row fields above). `Move` puts addon lines' text on other line indices for the card, which would confuse an addon that later edits "its" line by index. `ACTION_NAMES` lists the button names of the game, Bartender, Dominos and ElvUI.
 
 ## Toasts.lua
 
