@@ -233,6 +233,16 @@ test("only small icons: the top row is theirs, with their narrower gaps", functi
 	clean()
 end)
 
+test("a missing buff's tooltip: owned by the screen, at the mouse (the game won't hang it from the container's row)", function()
+	wow.login({})
+	wow.hover(SereneAuraGhost1)
+	eq(GameTooltip:GetOwner(), UIParent, "not owned by the ghost")
+	ok(GameTooltip:IsShown(), "shown")
+	wow.hover(nil)
+	no(GameTooltip:IsShown(), "gone with the mouse")
+	clean()
+end)
+
 test("nothing missing: no row of ghosts; a fight hides them before it locks them", function()
 	missing = {}
 	wow.login({})

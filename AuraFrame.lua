@@ -582,10 +582,15 @@ end
 
 -- (each missing one is a secure button of its own, so a click casts it: the row sits beside the game's container,
 -- whose size is secret, so where an icon is can't be read to lay a button over it)
+local tipFrom -- (the ghost whose tooltip shows: only it hides it again)
 local function Tip(icon)
 	local g = icon.ghost
 	if not g then return end
-	GameTooltip:SetOwner(icon, "ANCHOR_BOTTOMLEFT")
+	-- (owned by the screen and at the mouse, not by the icon: the row hangs from the game's container, which keeps
+	-- addons' layout scripts out, and the game refuses to let the tooltip, which runs them, depend on anything of it,
+	-- its owner included)
+	GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
+	tipFrom = icon
 	GameTooltip:SetText(tostring(g.name), GOLD[1], GOLD[2], GOLD[3])
 	GameTooltip:AddLine(g.spell and "Missing. Click to cast it." or "Nothing on this weapon.", MUTED[1], MUTED[2],
 		MUTED[3])
@@ -604,7 +609,11 @@ local function GhostIcon(index)
 	pcall(b.mask.SetTexture, b.mask, DISC, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	b.mask:SetAllPoints(b.icon)
 	b:SetScript("OnEnter", Tip)
-	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	b:SetScript("OnLeave", function(self)
+		if tipFrom ~= self then return end
+		tipFrom = nil
+		GameTooltip:Hide()
+	end)
 	ghostIcons[index] = b
 	return b
 end
