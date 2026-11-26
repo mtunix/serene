@@ -1110,7 +1110,16 @@ C_Container = {
 	GetContainerItemCooldown = function() return 0, 0, 1 end,
 	GetBagName = function(bag) return bag == 0 and "Backpack" or ("Bag " .. bag) end,
 	GetBagSlotFlag = function() return false end,
-	PickupContainerItem = function(bag, slot) wow.cursor = { "item", (bagSlot(bag, slot) or {}).id } end,
+	PickupContainerItem = function(bag, slot)
+		local held, s = wow.cursor, bagSlot(bag, slot)
+		-- (an item held over an empty slot: put down there)
+		if held and held[1] == "item" and not s and wow.bags[bag] then
+			wow.bags[bag][slot] = { id = held[2] }
+			wow.cursor = nil
+			return
+		end
+		wow.cursor = { "item", (s or {}).id }
+	end,
 	UseContainerItem = function(bag, slot) wow.used = wow.used or {} table.insert(wow.used, { bag, slot }) end,
 	SplitContainerItem = function() end,
 	SortBags = function() end,

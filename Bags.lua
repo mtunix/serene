@@ -7,8 +7,9 @@ local Safe, Clean = ns.Safe, ns.Clean
 --   close as the game's do: B, the bag buttons, a merchant, a banker.
 -- * Items in quiet sections: Equipment, Consumables, Quest, Trade goods, Ammo, Keys, Other, Junk, and your own
 --   first (Alt-right-click an item: its section; right click a section of yours: remove it). One item over
---   several stacks: one cell, the whole count. Free slots: one cell at the foot (drop an item on it), the room
---   left in special bags (reagents, quiver, soul bag...) beside it.
+--   several stacks: one cell, the whole count. Free slots: one cell at the foot, the room left in special bags
+--   (reagents, quiver, soul bag...) beside it. An item dropped anywhere on the glass but the items (from your
+--   character, the bank, the bags, a merchant): put down in the first free slot.
 -- * Quality as a soft line under the icon (uncommon and better; quest items: gold), junk dimmed, a short glow on
 --   what just came.
 -- * Remembered: your bags and bank, and those of your other characters on this realm. The name at the top: whose
@@ -55,7 +56,7 @@ local protectedButtons = false -- the game's item buttons are protected here: la
 local glowAt, glowed = {}, {}  -- "bag:slot" -> when its glow began / glowed this opening
 local glowUntil = 0            -- (no glow after this: nothing to animate)
 local bagsByBank = false       -- the bags opened because a banker was spoken to (closed with the bank)
-local Refresh                  -- (below)
+local Refresh, PutDown         -- (below)
 local Menu = ns.BagMenu        -- (the small menu: whose bags, an item's section; BagMenu.lua)
 
 -- Reading the bags ----------------------------------------------------------------------------------------------------
@@ -64,6 +65,7 @@ local Container = C_Container or {}
 local NumSlots, SlotInfo, BagIDs = Items.NumSlots, Items.Slot, Items.Bags
 local KEYRING, REAGENT_BAG = Items.KEYRING, Items.REAGENT_BAG
 local FreeSlots, BankIDs = Items.FreeSlots, Items.BankBags
+local PickupItem = Container.PickupContainerItem or _G.PickupContainerItem
 
 -- What kind of room a bag holds: nil for any item, else a short word ("reagents", "quiver"...).
 local function SpecialKind(bag, family)
@@ -579,6 +581,11 @@ local function Drags(frame, win)
 			Refresh(win)
 		end
 	end)
+	-- (an item let go over the glass, or clicked onto it: put down, as on the free cell)
+	frame:SetScript("OnReceiveDrag", function() PutDown(win) end)
+	frame:HookScript("OnMouseUp", function(_, button)
+		if button == "LeftButton" then PutDown(win) end
+	end)
 end
 
 -- A word in the header or foot: muted, white under the mouse, a tooltip with what a click does.
@@ -595,6 +602,7 @@ local function Word(win, text, onClick, tip)
 	word:SetWords(text)
 	word:SetScript("OnClick", function(self, button)
 		if GetTime() - (win.droppedAt or 0) < 0.2 then return end -- (the end of a drag)
+		if PutDown(win) then return end -- (an item clicked onto the word: put down, not a click)
 		onClick(self, button)
 	end)
 	word:SetScript("OnEnter", function(self)
@@ -658,6 +666,20 @@ local function CharacterMenu(win, owner)
 			end }
 	end
 	Menu(owner, rows)
+end
+
+-- What the cursor holds (an item from the character, the bank or these bags; a merchant's, which buys it), into the
+-- window's first free slot that takes any item. Nothing free, or another character's window: it stays on the cursor.
+PutDown = function(win)
+	if not IsLive(win) then return false end
+	if GetTime() - (win.droppedAt or 0) < 0.2 then return false end -- (one drop heard twice: the drag and the mouse)
+	local kind = Clean(Safe(GetCursorInfo))
+	if kind ~= "item" and kind ~= "merchant" then return false end
+	local _, free = Scan(win.kind == "bags" and BagIDs() or BankIDs())
+	if not free.bag then return false end
+	win.droppedAt = GetTime()
+	Safe(PickupItem, free.bag, free.slot)
+	return true
 end
 
 local OpenBank -- (below)

@@ -236,6 +236,66 @@ test("at a banker, \"tabs\": how full each tab is, and buying one more on the ga
 	clean()
 end)
 
+test("an item dropped anywhere on the bags: put down in the first free slot", function()
+	wow.bags[0] = { size = 4, [1] = { id = 2589, count = 5 }, [2] = { id = 4865 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	wow.cursor = { "item", 25 } -- (taken off the character)
+	SereneBags:_Fire("OnReceiveDrag")
+	eq(wow.bags[0][3] and wow.bags[0][3].id, 25, "in the first free slot")
+	no(wow.cursor, "the cursor empty")
+	wow.advance(0.5)
+	wow.cursor = { "item", 15 }
+	SereneBags:_Fire("OnMouseUp", "LeftButton") -- (picked up with a click, clicked onto the glass)
+	eq(wow.bags[0][4] and wow.bags[0][4].id, 15, "clicked onto it, too")
+	clean()
+end)
+
+test("an item dropped on a word of the bags: put down, and the word not clicked", function()
+	wow.bags[0] = { size = 4, [1] = { id = 2589, count = 5 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	wow.cursor = { "item", 25 }
+	SereneBags.close:_Fire("OnMouseUp", "LeftButton")
+	SereneBags.close:_Fire("OnClick", "LeftButton")
+	eq(wow.bags[0][2] and wow.bags[0][2].id, 25, "put down once")
+	no(wow.bags[0][3], "not twice")
+	ok(SereneBags:IsShown(), "the cross not taken as a click")
+	clean()
+end)
+
+test("an item dropped on full bags, or on another character's: it stays on the cursor", function()
+	wow.bags[0] = { size = 1, [1] = { id = 2589, count = 5 } }
+	Login()
+	OpenAllBags()
+	wow.advance(0.2)
+	wow.cursor = { "item", 25 }
+	SereneBags:_Fire("OnReceiveDrag")
+	eq(wow.cursor, { "item", 25 }, "full: still held")
+	wow.bags[0].size = 4
+	SereneBags.viewing = "Someone"
+	SereneBags:_Fire("OnReceiveDrag")
+	eq(wow.cursor, { "item", 25 }, "another's: still held")
+	no(wow.bags[0][2], "nothing put down")
+	ClearCursor()
+	clean()
+end)
+
+test("at a banker, an item dropped anywhere on the bank: put down in its first free slot", function()
+	C_Bank.FetchPurchasedBankTabData = function() return { { ID = 6, name = "Tab 1" } } end
+	wow.bags[6] = { size = 10, [1] = { id = 2589, count = 5 } }
+	Login()
+	wow.fire("BANKFRAME_OPENED")
+	wow.advance(0.2)
+	wow.cursor = { "item", 2592 } -- (from the bags)
+	SereneBank:_Fire("OnReceiveDrag")
+	eq(wow.bags[6][2] and wow.bags[6][2].id, 2592, "in the bank")
+	no(wow.cursor)
+	clean()
+end)
+
 -- Make room (BagRoom.lua) and the small menu (BagMenu.lua) ---------------------------------------------------------------
 
 local function Click(word) word:GetScript("OnClick")(word, "LeftButton") end
