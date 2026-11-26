@@ -136,4 +136,4 @@ A version that brings settings worth showing gets an entry at the end of `NEWS`:
 
 ## Bindings.xml
 
-Three key bindings, under AddOns > Serene: `SERENE_PEEK` shows everything while held (it uses `runOnUp`, so it hears the key going down and coming up), `SERENE_TRACKER` toggles the quest tracker and `SERENE_NAMES` the names over heads. Their names in the key binding menu are the `BINDING_*` globals set in Fade.lua, Tracker.lua and Names.lua.
+Three key bindings, in their own Serene section of the key binding menu (each binding's `category` is `BINDING_HEADER_SERENE`; [forever-client.md](forever-client.md#key-bindings) explains why not `header`): `SERENE_PEEK` shows everything while held (it uses `runOnUp`, so it hears the key going down and coming up), `SERENE_TRACKER` toggles the quest tracker and `SERENE_NAMES` the names over heads. Their names in the key binding menu are the `BINDING_*` globals set in Fade.lua, Tracker.lua and Names.lua.

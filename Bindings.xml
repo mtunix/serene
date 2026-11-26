@@ -1,11 +1,11 @@
 <Bindings>
-	<Binding name="SERENE_PEEK" runOnUp="true" header="SERENE">
+	<Binding name="SERENE_PEEK" runOnUp="true" category="BINDING_HEADER_SERENE">
 		Serene_Peek(keystate)
 	</Binding>
-	<Binding name="SERENE_TRACKER">
+	<Binding name="SERENE_TRACKER" category="BINDING_HEADER_SERENE">
 		Serene_ToggleTracker()
 	</Binding>
-	<Binding name="SERENE_NAMES" default="`">
+	<Binding name="SERENE_NAMES" default="`" category="BINDING_HEADER_SERENE">
 		Serene_ToggleNames()
 	</Binding>
 </Bindings>

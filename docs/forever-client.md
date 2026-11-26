@@ -55,6 +55,10 @@ A few of the game's frames behave in ways that explain specific code:
 - The recipe toast's icon is a baked, pre-masked round texture (`mask9`) that includes the bevel (Toasts.lua).
 - `GetLatestCompletedAchievements` returns nothing, so the sample achievement toast finds one by scanning categories (Toasts.lua).
 
+## Key bindings
+
+The key binding menu is retail's (`Blizzard_SettingsDefinitions_Frame/Keybindings.lua`). It groups bindings by their `category` attribute in `Bindings.xml`. That attribute is the name of a global string, which becomes the section's title (Serene uses `BINDING_HEADER_SERENE`). The menu is rebuilt on `ADDON_LOADED`, after the addon's Lua has run, so the string exists by then. A binding without a category goes under "Other". The classic `header` attribute adds a pseudo-binding named `HEADER_<name>`: with no category, the menu lists it as a binding row called `HEADER_SERENE`, both under "Other" and in search results. There is no "AddOns" section.
+
 ## Textures
 
 Passing `"TRILINEAR"` as the filter argument to `SetTexture` on Serene's TGA files, for a texture or a mask, crashes the client at login with `ACCESS_VIOLATION reading 0xffffffffffffffff` and no Lua stack. `tools/test/spec/client_rules.lua` fails if any file passes it. Crash reports are written to `_forever_/errors/`.
