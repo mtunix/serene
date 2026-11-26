@@ -8,6 +8,7 @@ namespace (`ns`), no libraries.
 | Path | What |
 |---|---|
 | `*.lua`, `Serene.toc` | The addon. TOC order is load and init order. |
+| `README.md`, `docs/screenshots/`, `docs/logo/` | The showcase for GitHub and CurseForge: what Serene does, screenshots, the logo |
 | `docs/` | Developer docs: architecture, the client, the workflow, one page per area |
 | `tools/check.py`, `tools/globals.txt` | Static check |
 | `tools/test/` | Tests: the addon run under Lua 5.1 against a stub of the client |
