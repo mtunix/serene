@@ -77,7 +77,7 @@ If you change a large file with a script, check that each search string occurs e
 
 `/reload` picks up Lua changes, and the settings that need a reload. New or changed `.tga` files need a full restart of the game.
 
-Most problems on this client only appear in a fight, because of secret values and combat lockdown, so test in and out of combat; a training dummy or any mob will do. Many of the frames Serene restyles are Edit Mode systems, so try with Edit Mode open as well. `/fstack` names the frames under the mouse. For Lua errors, use BugSack and BugGrabber or turn on the game's script errors.
+Most problems on this client only appear in a fight, because of secret values and combat lockdown, so test in and out of combat; a training dummy or any mob will do. Many of the frames Serene restyles are Edit Mode systems, so try with Edit Mode open as well. `/fstack` names the frames under the mouse. For Lua errors, use BugSack and BugGrabber or turn on the game's script errors (`/console scriptErrors 1`). For "Serene has been blocked from an action" or "Interface action failed", turn on the taint log (`/console taintLog 2`): the game writes `Logs/taint.log` as it goes, a `/reload` starts it afresh, and each entry naming Serene carries the stack that led to it. Lines about `BINDING_*` globals, `CHAT_FRAME_TAB_*_ALPHA` and the windows in `UISpecialFrames` are expected and harmless. Not every block reaches the log, so Serene says each one in chat itself (the action the game refused, whether in a fight, the frame under the mouse) and keeps the last 20 in `SereneDB.probeBlocked` (Core.lua).
 
 ## Debug commands
 
@@ -120,6 +120,7 @@ Some words after `debug` produce larger dumps:
 | `/serene debug mouse` | the frames under the mouse with their parents, saved to `probeMouse` |
 | `/serene debug menu` | MenuBar's line only |
 | `/serene debug glow` | the shown parts of the action button under the mouse, naming any glow Serene doesn't know, saved to `probeGlow` |
+| `/serene debug taint [frame]` | the keys of a frame (named, or under the mouse) and of its parent that an addon wrote, and by whom, then the same for the game's globals a bag item's click reads (`issecurevariable`), saved to `probeTaint` |
 
 ## Getting data out of the client
 

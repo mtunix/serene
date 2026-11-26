@@ -231,6 +231,7 @@ ns.STATE = {
 	merchantNoted = true, bagsNoted = true,           -- one-time notes said
 	bankPos = true, bagsPos = true,                   -- Bags.lua windows placed by hand
 	unitsDump = true, probeMouse = true, probeGlow = true, -- debug dumps (Units, Auras, ActionBars)
+	probeBlocked = true, probeTaint = true,           -- what the game blocked Serene from, what addons wrote (Core.lua)
 	capture = true, capturing = true,                 -- Capture.lua
 }
 
@@ -434,6 +435,85 @@ local function Refresh()
 end
 ns.Refresh = Refresh
 
+-- The game blocking Serene ("Serene has been blocked from an action only available to the Blizzard UI"): the action
+-- it refused, whether in a fight, and the frame under the mouse, said in chat and kept in `probeBlocked` (the last
+-- 20) to read from the SavedVariables after a /reload. (The game names only the action, never the code that led to
+-- it in the popup, and doesn't always write it to taint.log; the stack, taken as it happens, does.)
+local blocks = CreateFrame("Frame")
+for _, event in ipairs({ "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED" }) do pcall(blocks.RegisterEvent, blocks, event) end
+blocks:SetScript("OnEvent", function(_, event, addon, action)
+	if addon ~= ADDON or not ns.db then return end
+	local focus = GetMouseFoci and ns.Safe(GetMouseFoci)
+	if type(focus) == "table" then focus = focus[1] end
+	local under = focus and ns.Clean(ns.Safe(focus.GetDebugName, focus)) or "nothing"
+	local fight = InCombatLockdown()
+	local line = ("%s %s %s%s, under the mouse: %s"):format(date("%H:%M:%S"), event == "ADDON_ACTION_FORBIDDEN"
+		and "forbidden" or "blocked", tostring(action), fight and " (in a fight)" or "", tostring(under))
+	-- (the event comes while the refused call is still running: the stack names the code that made it)
+	local stack = rawget(_G, "debugstack")
+	stack = type(stack) == "function" and ns.Safe(stack, 2, 30, 0)
+	if type(stack) == "string" then
+		local first = stack:match("(Serene/[^\n]-:%d+)")
+		if first then line = line .. ", from " .. first end
+	end
+	ns.db.probeBlocked = type(ns.db.probeBlocked) == "table" and ns.db.probeBlocked or {}
+	tinsert(ns.db.probeBlocked, type(stack) == "string" and (line .. "\n" .. stack) or line)
+	while #ns.db.probeBlocked > 20 do tremove(ns.db.probeBlocked, 1) end
+	ns.Print(ns.MUTED .. "blocked by the game: " .. line .. "|r")
+end)
+
+-- /serene debug taint [frame]: which keys of a frame (the one named, or under the mouse) and of its parent an addon
+-- wrote, and by whom, then the same for the game's globals a bag item's click reads. The game refuses a protected
+-- action when its own code read something an addon wrote on the way; this names what. Kept in `probeTaint`.
+local CLICK_READS = { "MerchantFrame", "BankFrame", "ItemButtonUtil", "ItemLocation", "C_Container", "StackSplitFrame",
+	"MailFrame", "TradeFrame", "AuctionHouseFrame", "GuildBankFrame", "EventRegistry", "C_Spell", "C_Item",
+	"ContainerFrameItemButton_OnClick", "MerchantFrame_ResetRefundItem", "BankUtil_IsAccountBankDepositRefundable",
+	"IsModifiedClick", "GetCursorInfo", "SpellCanTargetItem", "CursorHasItem" }
+function ns.TaintProbe(name)
+	local secure = rawget(_G, "issecurevariable")
+	if type(secure) ~= "function" then return ns.Print("no issecurevariable on this client") end
+	local frame = name and rawget(_G, name)
+	if not frame then
+		local focus = GetMouseFoci and ns.Safe(GetMouseFoci)
+		frame = type(focus) == "table" and focus[1] or nil
+	end
+	local lines = {}
+	local function Say(text)
+		lines[#lines + 1] = text
+		ns.Print(text)
+	end
+	local function Keys(label, t)
+		if type(t) ~= "table" then return end
+		local count = 0
+		for key in pairs(t) do
+			local ok, isSecure, by = pcall(secure, t, key)
+			if ok and not isSecure then
+				count = count + 1
+				Say(("  %s.%s by %s"):format(label, tostring(key), tostring(by)))
+			end
+		end
+		Say(("%s: %d keys written by addons"):format(label, count))
+	end
+	if frame then
+		local label = ns.Clean(ns.Safe(frame.GetDebugName, frame)) or "frame"
+		Keys(label, frame)
+		local parent = ns.Safe(frame.GetParent, frame)
+		Keys(label .. ":GetParent()", parent)
+	else
+		Say("no frame named or under the mouse")
+	end
+	local count = 0
+	for _, global in ipairs(CLICK_READS) do
+		local ok, isSecure, by = pcall(secure, global)
+		if ok and not isSecure then
+			count = count + 1
+			Say(("  _G.%s by %s"):format(global, tostring(by)))
+		end
+	end
+	Say(("the click's globals: %d written by addons"):format(count))
+	ns.db.probeTaint = lines
+end
+
 -- Slash command ---------------------------------------------------------------------------------------------------
 
 local SWITCHES = {
@@ -555,6 +635,8 @@ SlashCmdList.SERENE = function(msg)
 		return ns.MenuDebug()
 	elseif a == "debug" and b == "mouse" and ns.AuraMouseDump then
 		return ns.AuraMouseDump()
+	elseif a == "debug" and b == "taint" then
+		return ns.TaintProbe(c and strtrim(msg or ""):match("^%S+%s+%S+%s+(%S+)") or nil) -- (a frame's name as typed)
 	elseif a == "debug" and b == "auras" and ns.AuraProbe then
 		return ns.AuraProbe()
 	elseif a == "sets" then

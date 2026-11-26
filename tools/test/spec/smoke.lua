@@ -208,9 +208,23 @@ test("/serene debug and its special words", function()
 	World()
 	wow.login(nil)
 	wow.advance(1)
-	for _, word in ipairs({ "", " menu", " mouse", " auras", " glow", " units", " units PlayerFrame" }) do
+	for _, word in ipairs({ "", " menu", " mouse", " auras", " glow", " units", " units PlayerFrame", " taint" }) do
 		wow.slash("/serene debug" .. word)
 	end
+	-- (the game's answer, as the stub has none: every key written by Serene)
+	issecurevariable = function() return false, "Serene" end
+	wow.slash("/serene debug taint PlayerFrame")
+	ok(#SereneDB.probeTaint > 0, "what addons wrote kept")
+	clean()
+end)
+
+test("the game blocking Serene: said and kept, the last 20; another addon's block: not", function()
+	World()
+	wow.login(nil)
+	for i = 1, 22 do wow.fire("ADDON_ACTION_FORBIDDEN", "Serene", "UNKNOWN()") end
+	wow.fire("ADDON_ACTION_BLOCKED", "Questie", "CastSpell()")
+	eq(#SereneDB.probeBlocked, 20, "the last 20")
+	ok(SereneDB.probeBlocked[20]:find("forbidden UNKNOWN%(%)"), "the action named")
 	clean()
 end)
 
