@@ -12,7 +12,7 @@ namespace (`ns`), no libraries.
 | `docs/` | Developer docs: architecture, the client, the workflow, one page per area |
 | `tools/check.py`, `tools/globals.txt` | Static check |
 | `tools/test/` | Tests: the addon run under Lua 5.1 against a stub of the client |
-| `.github/workflows/check.yml` | CI: the check and the tests on every push to `main` and every pull request |
+| `.github/workflows/check.yml`, `.pkgmeta` | CI: the check and the tests on every push and pull request, then CurseForge: an alpha for `dev`, a release when `main` gets a new TOC version |
 | `Media/`, `tools/media/` | TGA textures and the scripts that generate them |
 
 ## Read the docs before working — always
@@ -63,7 +63,8 @@ Client stub, specs per area, secret fights, settings checks, capture and fixture
 
 **Never add a `Co-Authored-By:` trailer**, or any other authorship or tool attribution.
 
-`main` is the branch; upstream is `github.com/mtunix/serene`.
+Work on `dev`; merging it into `main` releases the TOC's `## Version` to CurseForge (see
+[docs/workflow.md](docs/workflow.md#branches-and-releases)). Upstream is `github.com/mtunix/serene`.
 
 ## Commands
 

@@ -3,6 +3,7 @@
 ## Notes: A calm interface: chat in glass (a soft backdrop behind each message, nothing else), a clean minimap, and an interface that fades away when you don't need it and comes back on hover, in combat or with a target.
 ## Version: 1.1.0
 ## Author: mtunix
+## X-Curse-Project-ID: 1831290
 ## OptionalDeps: Questie
 ## SavedVariables: SereneDB
 

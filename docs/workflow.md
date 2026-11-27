@@ -61,7 +61,17 @@ The specs:
 
 When a test fails because the stub is too simple, improve the stub, or stub the missing piece at the top of the spec. When it fails because of the addon, fix the addon. A test's expectation should never be changed to match a bug. While working, run only the specs for the area you touched; run the whole suite and `check.py` once at the end.
 
-GitHub runs `check.py` and the whole suite on every push to `main` and every pull request (`.github/workflows/check.yml`), with the versions of `lupa` and `luaparser` pinned there. It has no fixtures, so the tests that need them skip.
+GitHub runs `check.py` and the whole suite on every push to `main` or `dev` and every pull request (`.github/workflows/check.yml`), with the versions of `lupa` and `luaparser` pinned there. It has no fixtures, so the tests that need them skip.
+
+### Branches and releases
+
+Work happens on `dev`; `main` holds what is released, and a release is merging `dev` into `main`. When the check and the suite pass, the same workflow packs the addon with the [BigWigs packager](https://github.com/BigWigsMods/packager) and uploads it to CurseForge:
+
+- A push to `dev` uploads an **alpha**, named after the last tag, the commits since it and the commit (`v1.1.0-12-g3184e65`). CurseForge offers alphas only to players who ask for them.
+- A push to `main` releases the TOC's `## Version`: it tags the commit `v<version>` and starts a run on that tag, which uploads a **release** and makes a GitHub release with the zip. If that tag exists already, nothing is uploaded, so raise the version on `dev` before merging. (The tag starts its own run because the packager won't pack a branch whose commit is tagged, and a tag pushed with the workflow's token starts no run by itself.)
+- A tag pushed by hand uploads too, as an alpha or beta if its name says so.
+
+The project is the TOC's `X-Curse-Project-ID`; the game version comes from its `Interface`, which the packager knows as the Forever client (`16xxx`). `.pkgmeta` names the folder in the zip and leaves out `docs/`, `tools/`, `README.md` and `CLAUDE.md` (dot files stay out on their own). The upload needs a CurseForge API token in the repository secret `CF_API_TOKEN`; without it the packager builds the zip and skips CurseForge.
 
 If you change a large file with a script, check that each search string occurs exactly once before replacing it; many of these files repeat similar lines.
 

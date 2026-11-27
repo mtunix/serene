@@ -1,8 +1,9 @@
-name: Check
+name: Check and release
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+    tags: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -25,3 +26,47 @@ jobs:
         run: python3 tools/check.py
       - name: Tests
         run: python3 tools/test/run.py
+
+  # A push to main releases the TOC's version: tags it, unless that version is out already, and hands the tag
+  # to a run of its own (the packager won't pack a branch whose commit is tagged, and a tag pushed with the
+  # workflow's token starts no run by itself)
+  tag:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag the version
+        run: |
+          tag="v$(sed -n 's/^## Version: *//p' Serene.toc | tr -d '\r ')"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::notice::$tag is out already; raise the TOC's Version to release this push"
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+          gh workflow run check.yml --ref "$tag"
+
+  # Packs the addon and uploads it to CurseForge: an alpha for every push to dev, a release for a tag
+  # (the project comes from the TOC's X-Curse-Project-ID, the game version from its Interface)
+  release:
+    needs: check
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/dev') || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2

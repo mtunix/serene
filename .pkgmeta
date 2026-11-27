@@ -1,0 +1,7 @@
+package-as: Serene
+
+ignore:
+  - docs
+  - tools
+  - README.md
+  - CLAUDE.md
