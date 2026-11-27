@@ -8,13 +8,14 @@ local Safe, Clean, Over = ns.Safe, ns.Clean, ns.Over
 -- * Under it, on a dark band fading at both ends: the zone in its color, where you stand and the time.
 -- * No ring art, zone plate or clutter of the game's (its zoom, clocks, world map button...). Three small round
 --   buttons on the ring, in the compass's look, under the mouse: the calendar (today's date, a gold dot for an
---   invitation), tracking, and every addon's minimap icon gathered in one panel (opened by a click; the button sits on the side of
+--   invitation; the game's day and night in its glass: a warm glow and a small sun by day, deep blue glass and a
+--   silver crescent by night), tracking, and every addon's minimap icon gathered in one panel (opened by a click; the button sits on the side of
 --   the ring facing the middle of the screen and the panel slides out from under the ring beside it, its side toward
 --   the compass an arc around it). The game's own
---   tracking button lies unseen over ours: its menu is the game's. The day and night and the game's calendar go. The mouse wheel zooms; the band tells
---   the time (a click on it: the game's clock and alarm; right click: the calendar). The mail, the queue and the
---   instance's difficulty stay where the game puts them (the queue's eye comes and goes with the compass; the top
---   bar tells of the queue meanwhile).
+--   tracking button lies unseen over ours: its menu is the game's. The game's own day and night and calendar go. The mouse wheel zooms; the band tells
+--   the time (a click on it: the game's clock and alarm; right click: the calendar). The mail sits on the ring at
+--   the lower corner the addons' button leaves free. The queue and the instance's difficulty stay where the game
+--   puts them (the queue's eye comes and goes with the compass; the top bar tells of the queue meanwhile).
 -- * Square instead of round: /serene edge square.
 -- /serene minimap on|off (a reload to switch). When it shows (under the mouse; with /serene compass world, always
 -- outside cities and towns) is Fade.lua's.
@@ -42,6 +43,13 @@ local LETTERS = { { "N", 0 }, { "E", 90 }, { "S", 180 }, { "W", 270 } }
 
 local MEDIA = "Interface\\AddOns\\Serene\\Media\\"
 local BADGE = 22                                  -- the round buttons on the ring
+local CALENDAR = 36                               -- the calendar's (it holds the sky as well)
+-- The calendar's sky: the glass, the glow rising from its bottom (color, opacity), the sun or moon and the date.
+local SKY = {
+	day = { glass = INK, glow = { 1, 0.72, 0.38, 0.40 }, glyph = "IconSun", color = NORTH_COLOR, label = "Day" },
+	night = { glass = { 0.03, 0.05, 0.12 }, glow = { 0.32, 0.46, 0.86, 0.30 }, glyph = "IconMoon",
+		color = { 0.80, 0.85, 0.96 }, label = "Night" },
+}
 local SATELLITES = { calendar = 45, addons = 135, tracking = 315 } -- their place, degrees clockwise from north
 local ADDONS_LEFT = 225                           -- the addons' button when the panel opens to the left
 local FLY_SIZE, FLY_GAP, FLY_COLUMNS, FLY_PAD = 24, 6, 6, 8       -- the addons' panel (at most 6 a row)
@@ -94,14 +102,17 @@ local function Borders()
 		Part(cluster, "ZoneTextButton"), _G.MinimapZoneTextButton, _G.MinimapToggleButton, _G.MinimapNorthTag)
 end
 
--- Gone for good: the zoom (the wheel zooms), the clock (the band tells the time), the world map button (M).
+-- Gone for good: the zoom (the wheel zooms), the clock (the band tells the time), the world map button (M), the
+-- day and night (this client's sun or moon in a little gold ring, nameless, high on the right where the calendar's
+-- button sits).
 local function Unwanted()
-	local map = Minimap
+	local map, cluster = Minimap, MinimapCluster
 	return List(Part(map, "ZoomIn"), Part(map, "ZoomOut"), _G.MinimapZoomIn, _G.MinimapZoomOut, Part(map, "ZoomHitArea"),
-		_G.TimeManagerClockButton, _G.MiniMapWorldMapButton, _G.ExpansionLandingPageMinimapButton, _G.GameTimeFrame)
+		_G.TimeManagerClockButton, _G.MiniMapWorldMapButton, _G.ExpansionLandingPageMinimapButton, _G.GameTimeFrame,
+		Part(cluster, "DielFrame"))
 end
 
--- What stays where the game puts it: the mail, the queue, the instance's difficulty (they tell you something).
+-- What stays (not tucked away): the mail, the queue, the instance's difficulty (they tell you something).
 local STAYS = { "Mail", "Difficulty", "Battlefield", "LFG", "Queue", "Challenge", "Voice", "Indicator", "Instance" }
 local function Stays(frame)
 	local name = frame.GetName and frame:GetName()
@@ -568,7 +579,8 @@ ns.OpenCalendar = OpenCalendar
 
 local function Badge(key)
 	local badge = CreateFrame("Button", nil, Minimap)
-	badge:SetSize(BADGE, BADGE)
+	local size = key == "calendar" and CALENDAR or BADGE
+	badge:SetSize(size, size)
 	badge:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 4)
 	badge:EnableMouse(false)
 	badge:SetAlpha(0) -- (the driver brings it with the mouse)
@@ -577,15 +589,23 @@ local function Badge(key)
 	badge.disc:SetAllPoints()
 	badge.disc:SetVertexColor(INK[1], INK[2], INK[3], 0.88)
 	badge.rim = badge:CreateTexture(nil, "BORDER")
-	badge.rim:SetTexture(MEDIA .. "BadgeRim")
+	badge.rim:SetTexture(MEDIA .. (key == "calendar" and "CalendarRim" or "BadgeRim")) -- (as fine a line at any size)
 	badge.rim:SetAllPoints()
 	if key == "calendar" then
-		badge.day = Text(badge, 10, NORTH_COLOR)
+		badge.glow = badge:CreateTexture(nil, "BACKGROUND", nil, 1)
+		badge.glow:SetTexture(MEDIA .. "BadgeSky")
+		badge.glow:SetAllPoints()
+		badge.glow:Hide()
+		badge.glyph = badge:CreateTexture(nil, "ARTWORK")
+		badge.glyph:SetSize(12, 12)
+		badge.glyph:SetPoint("CENTER", badge, "CENTER", 0, 7)
+		badge.glyph:Hide()
+		badge.day = Text(badge, 16, NORTH_COLOR)
 		badge.day:SetPoint("CENTER", badge, "CENTER", 0, 0)
 		badge.dot = badge:CreateTexture(nil, "OVERLAY")
 		badge.dot:SetTexture(MEDIA .. "BadgeDisc")
-		badge.dot:SetSize(7, 7)
-		badge.dot:SetPoint("CENTER", badge, "TOPRIGHT", -3, -3)
+		badge.dot:SetSize(8, 8)
+		badge.dot:SetPoint("CENTER", badge, "TOPRIGHT", -5, -5)
 		badge.dot:SetVertexColor(NORTH_COLOR[1], NORTH_COLOR[2], NORTH_COLOR[3], 1)
 		badge.dot:Hide()
 		badge:EnableMouse(true)
@@ -594,6 +614,8 @@ local function Badge(key)
 		badge:SetScript("OnEnter", function(self)
 			ns.ShowTip(self, function(tip)
 				tip:SetText(LABELS.calendar)
+				local sky = SKY[self.sky]
+				if sky then tip:AddLine(sky.label, ns.MUTED_RGB[1], ns.MUTED_RGB[2], ns.MUTED_RGB[3]) end
 				local invites = C_Calendar and Clean(Safe(C_Calendar.GetNumPendingInvites))
 				if type(invites) == "number" and invites > 0 then
 					tip:AddLine(invites == 1 and "1 invitation" or (invites .. " invitations"), NORTH_COLOR[1], NORTH_COLOR[2], NORTH_COLOR[3])
@@ -669,8 +691,9 @@ local function SatellitePoint(key)
 	local width = laidWidth or Clean(Safe(Minimap.GetWidth, Minimap)) or 140
 	local degrees = SATELLITES[key]
 	if key == "addons" and flyH < 0 then degrees = ADDONS_LEFT end
+	if key == "mail" then degrees = flyH < 0 and SATELLITES.addons or ADDONS_LEFT end -- (the lower corner left free)
 	local angle = math.rad(degrees)
-	local radius = width / 2 + 2
+	local radius = width / 2 + 2 -- (every button's middle on the ring, whatever its size)
 	local x, y = math.sin(angle) * radius, math.cos(angle) * radius
 	if ns.db.edge == "square" then
 		local most = math.max(math.abs(math.sin(angle)), math.abs(math.cos(angle)))
@@ -679,8 +702,30 @@ local function SatellitePoint(key)
 	return x, y
 end
 
+-- The mail: on the ring at the lower corner the addons' button leaves free. (The game hangs it from its zone plate,
+-- which is gone: it would land under the addons' button, or anywhere Edit Mode's header puts it.) The game places it
+-- again when the header moves; it is put back at once.
+local mailHooked, placingMail = false, false
+local function PlaceMail()
+	local mail = Part(MinimapCluster, "IndicatorFrame") or _G.MiniMapMailFrame
+	if type(mail) ~= "table" or not mail.SetPoint then return end
+	local x, y = SatellitePoint("mail")
+	placingMail = true
+	pcall(mail.ClearAllPoints, mail)
+	pcall(mail.SetPoint, mail, "CENTER", Minimap, "CENTER", x, y)
+	pcall(mail.SetFrameLevel, mail, (Minimap:GetFrameLevel() or 1) + 4) -- (over the ring)
+	placingMail = false
+	if not mailHooked then
+		mailHooked = true
+		hooksecurefunc(mail, "SetPoint", function()
+			if not placingMail then PlaceMail() end
+		end)
+	end
+end
+
 function ns.PlaceSatellites()
 	if not deco then return end
+	PlaceMail()
 	for key in pairs(SATELLITES) do
 		local badge = badges[key]
 		if badge then
@@ -692,10 +737,34 @@ function ns.PlaceSatellites()
 	end
 end
 
+-- Day or night as the game tells it (what its own dial, tucked away, showed): the badge's glass a sky, the sun or moon
+-- over the date. Not known: the plain glass and the date alone.
+local function Sky(badge)
+	local isDay = C_DateAndTime and C_DateAndTime.IsDayTime and Clean(Safe(C_DateAndTime.IsDayTime))
+	local now = isDay == true and "day" or isDay == false and "night" or nil
+	if badge.sky == now and badge.skyLaid then return end
+	badge.sky, badge.skyLaid = now, true
+	local sky = SKY[now]
+	local glass = sky and sky.glass or INK
+	badge.disc:SetVertexColor(glass[1], glass[2], glass[3], 0.88)
+	badge.glow:SetShown(sky ~= nil)
+	badge.glyph:SetShown(sky ~= nil)
+	local color = sky and sky.color or NORTH_COLOR
+	badge.day:SetTextColor(color[1], color[2], color[3])
+	badge.day:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", sky and 15 or 16, "")
+	badge.day:ClearAllPoints()
+	badge.day:SetPoint("CENTER", badge, "CENTER", 0, sky and -5.5 or 0)
+	if not sky then return end
+	badge.glow:SetVertexColor(sky.glow[1], sky.glow[2], sky.glow[3], sky.glow[4])
+	badge.glyph:SetTexture(MEDIA .. sky.glyph)
+	badge.glyph:SetVertexColor(color[1], color[2], color[3], 1)
+end
+
 local function UpdateCalendar()
 	local badge = badges.calendar
 	if not badge then return end
 	badge.day:SetText(tonumber(date("%d")) or "") -- (no leading zero)
+	Sky(badge)
 	local invites = C_Calendar and Clean(Safe(C_Calendar.GetNumPendingInvites)) or Clean(Safe(_G.CalendarGetNumPendingInvites))
 	badge.dot:SetShown(type(invites) == "number" and invites > 0)
 end

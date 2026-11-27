@@ -11,6 +11,7 @@ xpcall
 
 # The game's functions and namespaces
 Ambiguate BreakUpLargeNumbers BuyMerchantItem C_AddOns C_Bank C_Calendar C_ChatInfo C_ClassColor C_Container
+C_DateAndTime
 C_CurrencyInfo C_CurveUtil C_CVar C_EquipmentSet C_FriendList C_GuildInfo C_Item C_LFGList C_Map C_MerchantFrame
 C_NamePlate C_NewItems C_PartyInfo C_PlayerInteractionManager C_Spell C_SpellBook C_Texture C_TooltipInfo
 C_UnitAuras ClearCursor CreateMacro CreateUnitHealPredictionCalculator CursorHasItem DeleteCursorItem EditMacro

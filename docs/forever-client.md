@@ -39,6 +39,8 @@ The target, focus and nameplate aura icons the game draws are one newer template
 
 The client has its own swing timer. It is switched by the CVar `showSwingTimer`, placed by Edit Mode as a system with two frames (`Enum.EditModeSwingTimerSystemIndices` MainHand and OffHand), exposed through `C_SwingTimer`, and announced by the event `PLAYER_SWING(swingDuration, swingType)` with `Enum.PlayerSwingType` 0 for main hand, 1 for off hand and 2 for ranged. The frames' names aren't documented anywhere, so Swing.lua finds them through Edit Mode.
 
+The client has a day and night cycle. `C_DateAndTime.IsDayTime()` says which it is and the event `DIEL_CYCLE_CHANGED(isDayTime)` announces the change. The game's minimap shows it as a dial (`Blizzard_Minimap/Camelot/Diel.lua`): `MinimapCluster.DielFrame`, a nameless frame on `MinimapCluster.MinimapContainer` at 55, 86 from its centre, with the atlases `UI-HUD-Minimap-DayCycle`, `UI-HUD-Minimap-NightCycle` and the gold ring `UI-HUD-Minimap-Frame-Cycle`. The game places it again when Edit Mode scales the minimap.
+
 Roll messages in the loot chat start with a hidden link of their own, `|HlootHistory:%d|h[Loot]|h: `, which shifts every argument of the sentence by one. ChatLoot.lua skips such leading arguments.
 
 The sell price in item tooltips isn't a money frame. It's a typed data line (`Enum.TooltipDataLineType.SellPrice`) drawn as a plain text row, with `lineData.price` holding the price of the whole stack. Tooltip.lua rewrites that row in place rather than appending its own line.
